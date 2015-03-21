@@ -1,0 +1,19 @@
+branches:
+ only:
+  - master
+  - sbt-0.12
+
+# BLOCKED https://github.com/Shippable/support/issues/1170
+build_image:
+  - ensime/ensime:shippable-1.0
+
+script:
+  - sbt ++$SCALA_VERSION compile &&
+    if [ "$PULL_REQUEST" = "false" ] ; then         
+      sbt ++$SCALA_VERSION publish ;
+    fi
+
+env:
+  global:
+    - SCALA_VERSION=2.10.5
+    - secure: h70qzhKRJ/VHJp//y0a2O3QoGUvL6BfczBLuwdo23l4rvEb1GjlL2qmDPzfPGUbLO7ztVOn4v6zFfXeT7IpuOXwA8kwVmbK0P/0by/O+m2Cp+EB2PcPSlpJrseYvJIqfdkwrQnN0WLSV4joXC/BV4UabiMv/l2aIqu1ZM/5X+OesNvjo5Wp+h/WmhhVumZCS86lJEQg5FzKd2AXOkzsGDs0uJ0XW03SqjK2t7jE/iWBk8ahUO49+3m2jvHLrexhsMCEfq7KVOzs6kIoD+m2DzFmwCrSeBYJSaOihYRMYuDCownz3wfUqWrBPvH0soXUY/9L1IWt4KBZ4ovzxQ71Nxw==
