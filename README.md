@@ -1,5 +1,6 @@
 [![Bountysource](https://www.bountysource.com/badge/tracker?tracker_id=239449)](https://www.bountysource.com/trackers/239449-ensime?utm_source=239449&utm_medium=shield&utm_campaign=TRACKER_BADGE)
-[![Build Status](https://travis-ci.org/ensime/ensime-sbt.svg?branch=master)](https://travis-ci.org/ensime/ensime-sbt)
+[![Build Status](https://api.shippable.com/projects/5504572d5ab6cc13529ad108/badge?branchName=master)](https://app.shippable.com/projects/5504572d5ab6cc13529ad108/builds/latest)
+
 
 # ENSIME SBT
 
