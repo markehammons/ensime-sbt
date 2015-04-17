@@ -38,11 +38,12 @@ publishTo <<= version { v: String =>
   else                    Some("releases"  at nexus + "service/local/staging/deploy/maven2")
 }
 
-credentials += Credentials(
-  "Sonatype Nexus Repository Manager", "oss.sonatype.org",
-  sys.env.get("SONATYPE_USERNAME").getOrElse(""),
-  sys.env.get("SONATYPE_PASSWORD").getOrElse("")
-)
+credentials ++= {
+  for {
+    username <- sys.env.get("SONATYPE_USERNAME")
+    password <- sys.env.get("SONATYPE_PASSWORD")
+  } yield Credentials("Sonatype Nexus Repository Manager", "oss.sonatype.org", username, password)
+}.toSeq
 
 pomExtra := (
   <scm>
