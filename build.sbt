@@ -14,9 +14,11 @@ scalacOptions in Compile ++= Seq(
   //"-P:wartremover:traverser:org.brianmckenna.wartremover.warts.Unsafe"
 )
 
-// we actually depend at runtime on scalariform
-// TODO: when ENSIME itself is ready for a reformat, depend on the recent scalariform
-addSbtPlugin("com.typesafe.sbt" %% "sbt-scalariform" % "1.3.0")
+// we depend on scalariform to read the settings this might result in
+// upgrades to the underlying scalariform that the project may be
+// using, resulting in unintended reformatting as a result of
+// regressions / bugfixes in upstream.
+addSbtPlugin("org.scalariform" %% "sbt-scalariform" % "1.4.0")
 
 //scalariformSettings
 
