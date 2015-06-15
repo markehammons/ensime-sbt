@@ -2,7 +2,7 @@ name := "ensime-sbt"
 
 organization := "org.ensime"
 
-version := "0.1.7"
+version := "0.1.8-SNAPSHOT"
 
 sbtPlugin := true
 
