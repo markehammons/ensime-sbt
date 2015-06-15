@@ -112,7 +112,23 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     // workaround for Windows
     write(out, toSExp(config).replaceAll("\r\n", "\n") + "\n")
 
+    if (ignoringSourceDirs.nonEmpty) {
+      log.warn(
+        s"""Some source directories do not exist and will be ignored by ENSIME.
+           |If this is not what you want, create empty directories and re-run this command.
+           |For example (only showing 5): ${ignoringSourceDirs.take(5).mkString(",")} """.stripMargin
+      )
+    }
+
     state
+  }
+
+  // sbt reports a lot of source directories that the user never
+  // intends to use we want to create a report
+  var ignoringSourceDirs = Set.empty[File]
+  def filteredSources(sources: Set[File]): Set[File] = synchronized {
+    ignoringSourceDirs ++= sources.filterNot(_.exists())
+    sources.filter(_.exists())
   }
 
   def projectData(project: ResolvedProject)(
@@ -124,7 +140,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     def sourcesFor(config: Configuration) = {
       // invoke source generation so we can filter on existing directories
       (managedSources in config).runOpt
-      (managedSourceDirectories in config).gimmeOpt.map(_.filter(_.exists).toSet).getOrElse(Set()) ++
+      (managedSourceDirectories in config).gimmeOpt.map(_.toSet).getOrElse(Set()) ++
         (unmanagedSourceDirectories in config).gimmeOpt.getOrElse(Set())
     }
 
@@ -165,12 +181,12 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
       artifact = artifactFilter(classifier = "javadoc")
     )).toSet
 
-    val mainSources = sourcesFor(Compile)
-    val testSources = sourcesFor(Test) ++ sourcesFor(IntegrationTest)
+    val mainSources = filteredSources(sourcesFor(Compile) ++ sourcesFor(Provided) ++ sourcesFor(Optional))
+    val testSources = filteredSources(sourcesFor(Test) ++ sourcesFor(IntegrationTest))
     val mainTarget = targetFor(Compile)
     val testTargets = (targetForOpt(Test) ++ targetForOpt(IntegrationTest)).toSet
     val deps = project.dependencies.map(_.project.project).toSet
-    val mainJars = jarsFor(Compile) ++ unmanagedJarsFor(Compile) ++ jarsFor(Provided)
+    val mainJars = jarsFor(Compile) ++ unmanagedJarsFor(Compile) ++ jarsFor(Provided) ++ jarsFor(Optional)
     val runtimeJars = jarsFor(Runtime) ++ unmanagedJarsFor(Runtime) -- mainJars
     val testJars = jarsFor(Test) ++ jarsFor(IntegrationTest) ++
       unmanagedJarsFor(Test) ++ unmanagedJarsFor(IntegrationTest) -- mainJars
