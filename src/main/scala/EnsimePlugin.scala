@@ -7,6 +7,7 @@ import complete.Parsers._
 import collection.immutable.SortedMap
 import collection.JavaConverters._
 import java.lang.management.ManagementFactory
+import scala.util.Properties
 import scala.util._
 import java.io.FileNotFoundException
 import SExpFormatter._
@@ -24,7 +25,6 @@ object Imports {
     val debuggingPort = SettingKey[Int]("port for remote debugging of forked tasks")
     val compilerArgs = TaskKey[Seq[String]]("arguments for the presentation compiler, extracted from the compiler flags.")
     val additionalCompilerArgs = SettingKey[Seq[String]]("additional arguments for the presentation compiler, e.g. for additional warnings.")
-    val additionalSExp = TaskKey[String]("raw SExp to include in the output")
   }
 }
 
@@ -45,11 +45,16 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
   lazy val ensimeCommand = Command.command("gen-ensime")(genEnsime)
 
+  lazy val ensimeProjectCommand = Command.command("gen-ensime-project")(genEnsimeProject)
+
   lazy val debuggingOnCommand = Command.command("debugging-on")(toggleDebugging(true))
   lazy val debuggingOffCommand = Command.command("debugging-off")(toggleDebugging(false))
 
   override lazy val projectSettings = Seq(
-    commands ++= Seq(ensimeCommand, debuggingOnCommand, debuggingOffCommand),
+    commands ++= Seq(
+      ensimeCommand, ensimeProjectCommand,
+      debuggingOnCommand, debuggingOffCommand
+    ),
     EnsimeKeys.debuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
     EnsimeKeys.debuggingPort := 5005,
     EnsimeKeys.compilerArgs := (scalacOptions in Compile).value,
@@ -66,8 +71,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     ) ++ {
         if (scalaVersion.value.startsWith("2.11")) Seq("-Ywarn-unused-import")
         else Nil
-      },
-    EnsimeKeys.additionalSExp := ""
+      }
   )
 
   def toggleDebugging(enable: Boolean): State => State = { implicit state: State =>
@@ -140,24 +144,12 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
         log.warn(s"No Java sources detected in $javaH (your ENSIME experience will not be as good as it could be.)")
         None
     }
-    val javaFlags = {
-      // WORKAROUND https://github.com/ensime/ensime-sbt/issues/91
-      val raw = ManagementFactory.getRuntimeMXBean.getInputArguments.asScala.toList.map {
-        case "-Xss1M" => "-Xss2m"
-        case flag     => flag
-      }
-      raw.find { flag => flag.startsWith("-Xss") } match {
-        case Some(has) => raw
-        case None      => "-Xss2m" :: raw
-      }
-    }
-    val raw = (EnsimeKeys.additionalSExp in Compile).run
 
     val formatting = (ScalariformKeys.preferences in Compile).gimmeOpt
 
     val config = EnsimeConfig(
       root, cacheDir, name, scalaV, compilerArgs,
-      modules, javaH, javaFlags, javaSrc, formatting, raw
+      modules, javaH, JavaFlags, javaSrc, formatting
     )
 
     // workaround for Windows
@@ -212,21 +204,27 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     def targetForOpt(config: Configuration) =
       (classDirectory in config).gimmeOpt
 
-    // run these once to preserve any shred of performance
-    val updateReports = testPhases.flatMap {
-      phase => (update in phase).runOpt
+    // these are really slow to run, so try to minimise their invocations
+    val updateReport = testPhases.flatMap { phase =>
+      // the test reports include the "main" report
+      // optimisation: don't run extended phases if we don't have a source root
+      if (phase == Test || sourcesFor(phase).nonEmpty) (update in phase).runOpt
+      else Set.empty
     }
-    val updateClassifiersReports = testPhases.flatMap {
-      phase => (updateClassifiers in phase).runOpt
+    val updateClassifiersReports = {
+      testPhases.flatMap { phase =>
+        if (phase == Test || sourcesFor(phase).nonEmpty) (updateClassifiers in phase).runOpt
+        else Set.empty
+      }
     }
 
     val myDoc = (artifactPath in (Compile, packageDoc)).gimmeOpt
 
     val filter = if (sbtPlugin.gimme) "provided" else ""
 
-    def jarsFor(config: Configuration) = updateReports.flatMap(_.select(
+    def jarsFor(config: Configuration) = updateReport.flatMap(_.select(
       configuration = configurationFilter(filter | config.name.toLowerCase),
-      artifact = artifactFilter(extension = "jar")
+      artifact = artifactFilter(classifier = "")
     )).toSet
 
     def unmanagedJarsFor(config: Configuration) =
@@ -234,12 +232,12 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
     def jarSrcsFor(config: Configuration) = updateClassifiersReports.flatMap(_.select(
       configuration = configurationFilter(filter | config.name.toLowerCase),
-      artifact = artifactFilter(classifier = "sources")
+      artifact = artifactFilter(classifier = Artifact.SourceClassifier)
     )).toSet
 
     def jarDocsFor(config: Configuration) = updateClassifiersReports.flatMap(_.select(
       configuration = configurationFilter(filter | config.name.toLowerCase),
-      artifact = artifactFilter(classifier = "javadoc")
+      artifact = artifactFilter(classifier = Artifact.DocClassifier)
     )).toSet
 
     val mainSources = filteredSources(sourcesFor(Compile) ++ sourcesFor(Provided) ++ sourcesFor(Optional))
@@ -258,9 +256,74 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     val jarDocs = testPhases.flatMap(jarDocsFor) ++ myDoc
 
     EnsimeModule(
-      project.id, mainSources, testSources, mainTarget, testTargets, deps,
+      project.id, mainSources, testSources, Set(mainTarget), testTargets, deps,
       mainJars, runtimeJars, testJars, jarSrcs, jarDocs
     )
+  }
+
+  def genEnsimeProject: State => State = { implicit state: State =>
+    val extracted = Project.extract(state)
+
+    implicit val pr = extracted.currentRef
+    implicit val bs = extracted.structure
+
+    val jars = for {
+      unit <- bs.units
+      file <- unit._2.classpath
+      if !file.isDirectory() & file.getName.endsWith(Artifact.DefaultExtension)
+    } yield file
+
+    val targets = for {
+      unit <- bs.units
+      dir <- unit._2.classpath
+      if dir.isDirectory()
+    } yield dir
+
+    val classifiers = for {
+      config <- updateSbtClassifiers.run.configurations
+      module <- config.modules
+      artefact <- module.artifacts
+    } yield artefact
+
+    val srcs = classifiers.collect {
+      case (artefact, file) if artefact.classifier == Some(Artifact.SourceClassifier) => file
+    }
+    // they don't seem to publish docs...
+    val docs = classifiers.collect {
+      case (artefact, file) if artefact.classifier == Some(Artifact.DocClassifier) => file
+    }
+
+    val root = file(Properties.userDir) / "project"
+    val out = root / ".ensime"
+    val cacheDir = root / ".ensime_cache"
+    val name = EnsimeKeys.name.gimmeOpt.getOrElse {
+      file(Properties.userDir).getName + "-project"
+    }
+    val compilerArgs = {
+      (EnsimeKeys.compilerArgs in Compile).run.toList ++
+        (EnsimeKeys.additionalCompilerArgs in Compile).gimme
+    }.distinct
+    val scalaV = Properties.versionNumberString
+    val javaSrc = JdkDir / "src.zip" match {
+      case f if f.exists => Some(f)
+      case _             => None
+    }
+
+    val formatting = (ScalariformKeys.preferences in Compile).gimmeOpt
+
+    val module = EnsimeModule(
+      name, Set(root), Set.empty, targets.toSet, Set.empty, Set.empty,
+      jars.toSet, Set.empty, Set.empty, srcs.toSet, docs.toSet
+    )
+
+    val config = EnsimeConfig(
+      root, cacheDir, name, scalaV, compilerArgs,
+      Map(module.name -> module), JdkDir, JavaFlags, javaSrc, formatting
+    )
+
+    write(out, toSExp(config).replaceAll("\r\n", "\n") + "\n")
+
+    state
   }
 
   // WORKAROUND: https://github.com/typelevel/scala/issues/75
@@ -281,4 +344,17 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
       |You must explicitly set JDK_HOME or JAVA_HOME.""".stripMargin
       )
     )
+
+  lazy val JavaFlags = {
+    // WORKAROUND https://github.com/ensime/ensime-sbt/issues/91
+    val raw = ManagementFactory.getRuntimeMXBean.getInputArguments.asScala.toList.map {
+      case "-Xss1M" => "-Xss2m"
+      case flag     => flag
+    }
+    raw.find { flag => flag.startsWith("-Xss") } match {
+      case Some(has) => raw
+      case None      => "-Xss2m" :: raw
+    }
+  }
+
 }
