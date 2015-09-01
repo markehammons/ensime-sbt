@@ -1,3 +1,5 @@
+import scalariform.formatter.preferences._
+
 name := "ensime-sbt"
 
 organization := "org.ensime"
@@ -5,6 +7,8 @@ organization := "org.ensime"
 version := "0.1.8-SNAPSHOT"
 
 sbtPlugin := true
+
+fork := true
 
 scalacOptions in Compile ++= Seq(
   "-encoding", "UTF-8", "-target:jvm-1.6", "-feature", "-deprecation",
@@ -20,7 +24,9 @@ scalacOptions in Compile ++= Seq(
 // regressions / bugfixes in upstream.
 addSbtPlugin("org.scalariform" %% "sbt-scalariform" % "1.4.0")
 
-//scalariformSettings
+scalariformSettings
+
+ScalariformKeys.preferences := FormattingPreferences().setPreference(AlignSingleLineCaseStatements, true)
 
 publishMavenStyle := true
 

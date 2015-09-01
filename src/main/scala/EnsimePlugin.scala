@@ -13,13 +13,17 @@ import SExpFormatter._
 import com.typesafe.sbt.SbtScalariform.ScalariformKeys
 import scalariform.formatter.preferences.IFormattingPreferences
 
-/** Conventional way to define importable keys for an AutoPlugin.
-  * Note that EnsimePlugin.autoImport == Imports
-  */
+/**
+ * Conventional way to define importable keys for an AutoPlugin.
+ * Note that EnsimePlugin.autoImport == Imports
+ */
 object Imports {
   object EnsimeKeys {
     val name = SettingKey[String]("name of the ENSIME project")
-    val compilerArgs = TaskKey[Seq[String]]("arguments for the presentation compiler")
+    val debuggingFlag = SettingKey[String]("JVM flags to enable remote debugging of forked tasks")
+    val debuggingPort = SettingKey[Int]("port for remote debugging of forked tasks")
+    val compilerArgs = TaskKey[Seq[String]]("arguments for the presentation compiler, extracted from the compiler flags.")
+    val additionalCompilerArgs = SettingKey[Seq[String]]("additional arguments for the presentation compiler, e.g. for additional warnings.")
     val additionalSExp = TaskKey[String]("raw SExp to include in the output")
   }
 }
@@ -41,21 +45,56 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
   lazy val ensimeCommand = Command.command("gen-ensime")(genEnsime)
 
+  lazy val debuggingOnCommand = Command.command("debugging-on")(toggleDebugging(true))
+  lazy val debuggingOffCommand = Command.command("debugging-off")(toggleDebugging(false))
+
   override lazy val projectSettings = Seq(
-    commands += ensimeCommand,
+    commands ++= Seq(ensimeCommand, debuggingOnCommand, debuggingOffCommand),
+    EnsimeKeys.debuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
+    EnsimeKeys.debuggingPort := 5005,
     EnsimeKeys.compilerArgs := (scalacOptions in Compile).value,
+    EnsimeKeys.additionalCompilerArgs := Seq(
+      "-feature",
+      "-deprecation",
+      "-Xlint",
+      "-Yinline-warnings",
+      "-Yno-adapted-args",
+      "-Ywarn-dead-code",
+      "-Ywarn-numeric-widen",
+      "-Ywarn-value-discard",
+      "-Xfuture"
+    ) ++ {
+        if (scalaVersion.value.startsWith("2.11")) Seq("-Ywarn-unused-import")
+        else Nil
+      },
     EnsimeKeys.additionalSExp := ""
   )
 
-  def genEnsime(state: State): State = {
-    implicit val s = state
-    val provider = state.configuration.provider
+  def toggleDebugging(enable: Boolean): State => State = { implicit state: State =>
+    val extracted = Project.extract(state)
 
-    // val sbtScalaVersion = provider.scalaProvider.version
-    // val sbtInstance = ScalaInstance(sbtScalaVersion, provider.scalaProvider.launcher)
-    // val sbtProject = BuildPaths.projectStandard(state.baseDir)
-    // val sbtOut = BuildPaths.crossPath(BuildPaths.outputDirectory(sbtProject), sbtInstance)
+    implicit val pr = extracted.currentRef
+    implicit val bs = extracted.structure
 
+    if (enable) {
+      val port = EnsimeKeys.debuggingPort.gimme
+      log.warn("Enabling debugging for all forked processes")
+      log.info("Only one JVM can use the port and it will await a connection before proceeding.")
+    }
+
+    val newSettings = extracted.structure.allProjectRefs map { proj =>
+      val orig = (javaOptions in proj).run
+      val debugging = ((EnsimeKeys.debuggingFlag in proj).gimme + (EnsimeKeys.debuggingPort in proj).gimme)
+      val rewritten =
+        if (enable) { orig :+ debugging }
+        else { orig.diff(List(debugging)) }
+
+      (javaOptions in proj) := rewritten
+    }
+    extracted.append(newSettings, state)
+  }
+
+  def genEnsime: State => State = { implicit state: State =>
     val extracted = Project.extract(state)
     implicit val pr = extracted.currentRef
     implicit val bs = extracted.structure
@@ -89,7 +128,10 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
       if (modules.size == 1) modules.head._2.name
       else root.getAbsoluteFile.getName
     }
-    val compilerArgs = (EnsimeKeys.compilerArgs in Compile).run.toList
+    val compilerArgs = {
+      (EnsimeKeys.compilerArgs in Compile).run.toList ++
+        (EnsimeKeys.additionalCompilerArgs in Compile).gimme
+    }.distinct
     val scalaV = (scalaVersion in Compile).gimme
     val javaH = (javaHome in Compile).gimme.getOrElse(JdkDir)
     val javaSrc = file(javaH.getAbsolutePath + "/src.zip") match {
@@ -98,8 +140,17 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
         log.warn(s"No Java sources detected in $javaH (your ENSIME experience will not be as good as it could be.)")
         None
     }
-    val javaFlags = ManagementFactory.getRuntimeMXBean.
-      getInputArguments.asScala.toList
+    val javaFlags = {
+      // WORKAROUND https://github.com/ensime/ensime-sbt/issues/91
+      val raw = ManagementFactory.getRuntimeMXBean.getInputArguments.asScala.toList.map {
+        case "-Xss1M" => "-Xss2m"
+        case flag     => flag
+      }
+      raw.find { flag => flag.startsWith("-Xss") } match {
+        case Some(has) => raw
+        case None      => "-Xss2m" :: raw
+      }
+    }
     val raw = (EnsimeKeys.additionalSExp in Compile).run
 
     val formatting = (ScalariformKeys.preferences in Compile).gimmeOpt
@@ -132,10 +183,21 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
   }
 
   def projectData(project: ResolvedProject)(
-    implicit projectRef: ProjectRef,
+    implicit
+    projectRef: ProjectRef,
     buildStruct: BuildStructure,
-    state: State): EnsimeModule = {
+    state: State
+  ): EnsimeModule = {
     log.info(s"ENSIME processing ${project.id} (${name.gimme})")
+
+    val builtInTestPhases = Set(Test, IntegrationTest)
+    val testPhases = {
+      for {
+        phase <- ivyConfigurations.gimme
+        if !phase.name.toLowerCase.contains("internal")
+        if builtInTestPhases(phase) | builtInTestPhases.intersect(phase.extendsConfigs.toSet).nonEmpty
+      } yield phase
+    }.toSet
 
     def sourcesFor(config: Configuration) = {
       // invoke source generation so we can filter on existing directories
@@ -150,14 +212,13 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     def targetForOpt(config: Configuration) =
       (classDirectory in config).gimmeOpt
 
-    // run these once for performance
-    val updateReports = List(
-      (update in Test).runOpt,
-      (update in IntegrationTest).runOpt).flatten
-
-    val updateClassifiersReports = List(
-      (updateClassifiers in Test).runOpt,
-      (updateClassifiers in IntegrationTest).runOpt).flatten
+    // run these once to preserve any shred of performance
+    val updateReports = testPhases.flatMap {
+      phase => (update in phase).runOpt
+    }
+    val updateClassifiersReports = testPhases.flatMap {
+      phase => (updateClassifiers in phase).runOpt
+    }
 
     val myDoc = (artifactPath in (Compile, packageDoc)).gimmeOpt
 
@@ -182,20 +243,24 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     )).toSet
 
     val mainSources = filteredSources(sourcesFor(Compile) ++ sourcesFor(Provided) ++ sourcesFor(Optional))
-    val testSources = filteredSources(sourcesFor(Test) ++ sourcesFor(IntegrationTest))
+    val testSources = filteredSources(testPhases.flatMap(sourcesFor))
     val mainTarget = targetFor(Compile)
-    val testTargets = (targetForOpt(Test) ++ targetForOpt(IntegrationTest)).toSet
+    val testTargets = testPhases.flatMap(targetForOpt).toSet
     val deps = project.dependencies.map(_.project.project).toSet
     val mainJars = jarsFor(Compile) ++ unmanagedJarsFor(Compile) ++ jarsFor(Provided) ++ jarsFor(Optional)
     val runtimeJars = jarsFor(Runtime) ++ unmanagedJarsFor(Runtime) -- mainJars
-    val testJars = jarsFor(Test) ++ jarsFor(IntegrationTest) ++
-      unmanagedJarsFor(Test) ++ unmanagedJarsFor(IntegrationTest) -- mainJars
-    val jarSrcs = jarSrcsFor(Test) ++ jarSrcsFor(IntegrationTest)
-    val jarDocs = jarDocsFor(Test) ++ jarDocsFor(IntegrationTest) ++ myDoc
+    val testJars = {
+      testPhases.flatMap {
+        phase => jarsFor(phase) ++ unmanagedJarsFor(phase)
+      }
+    } -- mainJars
+    val jarSrcs = testPhases.flatMap(jarSrcsFor)
+    val jarDocs = testPhases.flatMap(jarDocsFor) ++ myDoc
 
     EnsimeModule(
       project.id, mainSources, testSources, mainTarget, testTargets, deps,
-      mainJars, runtimeJars, testJars, jarSrcs, jarDocs)
+      mainJars, runtimeJars, testJars, jarSrcs, jarDocs
+    )
   }
 
   // WORKAROUND: https://github.com/typelevel/scala/issues/75
@@ -209,11 +274,11 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     sys.props.get("java.home").map(new File(_).getParent),
     sys.props.get("java.home")
   ).flatten.filter { n =>
-    new File(n + "/lib/tools.jar").exists
-  }.headOption.map(new File(_)).getOrElse(
-    throw new FileNotFoundException(
-      """Could not automatically find the JDK/lib/tools.jar.
+      new File(n + "/lib/tools.jar").exists
+    }.headOption.map(new File(_)).getOrElse(
+      throw new FileNotFoundException(
+        """Could not automatically find the JDK/lib/tools.jar.
       |You must explicitly set JDK_HOME or JAVA_HOME.""".stripMargin
+      )
     )
-  )
 }
