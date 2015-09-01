@@ -167,6 +167,15 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
   ): EnsimeModule = {
     log.info(s"ENSIME processing ${project.id} (${name.gimme})")
 
+    val builtInTestPhases = Set(Test, IntegrationTest)
+    val testPhases = {
+      for {
+        phase <- ivyConfigurations.gimme
+        if !phase.name.toLowerCase.contains("internal")
+        if builtInTestPhases(phase) | builtInTestPhases.intersect(phase.extendsConfigs.toSet).nonEmpty
+      } yield phase
+    }.toSet
+
     def sourcesFor(config: Configuration) = {
       // invoke source generation so we can filter on existing directories
       (managedSources in config).runOpt
@@ -180,16 +189,13 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     def targetForOpt(config: Configuration) =
       (classDirectory in config).gimmeOpt
 
-    // run these once for performance
-    val updateReports = List(
-      (update in Test).runOpt,
-      (update in IntegrationTest).runOpt
-    ).flatten
-
-    val updateClassifiersReports = List(
-      (updateClassifiers in Test).runOpt,
-      (updateClassifiers in IntegrationTest).runOpt
-    ).flatten
+    // run these once to preserve any shred of performance
+    val updateReports = testPhases.flatMap {
+      phase => (update in phase).runOpt
+    }
+    val updateClassifiersReports = testPhases.flatMap {
+      phase => (updateClassifiers in phase).runOpt
+    }
 
     val myDoc = (artifactPath in (Compile, packageDoc)).gimmeOpt
 
@@ -214,16 +220,19 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     )).toSet
 
     val mainSources = filteredSources(sourcesFor(Compile) ++ sourcesFor(Provided) ++ sourcesFor(Optional))
-    val testSources = filteredSources(sourcesFor(Test) ++ sourcesFor(IntegrationTest))
+    val testSources = filteredSources(testPhases.flatMap(sourcesFor))
     val mainTarget = targetFor(Compile)
-    val testTargets = (targetForOpt(Test) ++ targetForOpt(IntegrationTest)).toSet
+    val testTargets = testPhases.flatMap(targetForOpt).toSet
     val deps = project.dependencies.map(_.project.project).toSet
     val mainJars = jarsFor(Compile) ++ unmanagedJarsFor(Compile) ++ jarsFor(Provided) ++ jarsFor(Optional)
     val runtimeJars = jarsFor(Runtime) ++ unmanagedJarsFor(Runtime) -- mainJars
-    val testJars = jarsFor(Test) ++ jarsFor(IntegrationTest) ++
-      unmanagedJarsFor(Test) ++ unmanagedJarsFor(IntegrationTest) -- mainJars
-    val jarSrcs = jarSrcsFor(Test) ++ jarSrcsFor(IntegrationTest)
-    val jarDocs = jarDocsFor(Test) ++ jarDocsFor(IntegrationTest) ++ myDoc
+    val testJars = {
+      testPhases.flatMap {
+        phase => jarsFor(phase) ++ unmanagedJarsFor(phase)
+      }
+    } -- mainJars
+    val jarSrcs = testPhases.flatMap(jarSrcsFor)
+    val jarDocs = testPhases.flatMap(jarDocsFor) ++ myDoc
 
     EnsimeModule(
       project.id, mainSources, testSources, mainTarget, testTargets, deps,
