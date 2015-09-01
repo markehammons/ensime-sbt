@@ -25,7 +25,6 @@ object Imports {
     val debuggingPort = SettingKey[Int]("port for remote debugging of forked tasks")
     val compilerArgs = TaskKey[Seq[String]]("arguments for the presentation compiler, extracted from the compiler flags.")
     val additionalCompilerArgs = SettingKey[Seq[String]]("additional arguments for the presentation compiler, e.g. for additional warnings.")
-    val additionalSExp = TaskKey[String]("raw SExp to include in the output")
   }
 }
 
@@ -72,8 +71,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     ) ++ {
         if (scalaVersion.value.startsWith("2.11")) Seq("-Ywarn-unused-import")
         else Nil
-      },
-    EnsimeKeys.additionalSExp := ""
+      }
   )
 
   def toggleDebugging(enable: Boolean): State => State = { implicit state: State =>
@@ -146,13 +144,12 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
         log.warn(s"No Java sources detected in $javaH (your ENSIME experience will not be as good as it could be.)")
         None
     }
-    val raw = (EnsimeKeys.additionalSExp in Compile).run
 
     val formatting = (ScalariformKeys.preferences in Compile).gimmeOpt
 
     val config = EnsimeConfig(
       root, cacheDir, name, scalaV, compilerArgs,
-      modules, javaH, JavaFlags, javaSrc, formatting, raw
+      modules, javaH, JavaFlags, javaSrc, formatting
     )
 
     // workaround for Windows
@@ -321,7 +318,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
     val config = EnsimeConfig(
       root, cacheDir, name, scalaV, compilerArgs,
-      Map(module.name -> module), JdkDir, JavaFlags, javaSrc, formatting, ""
+      Map(module.name -> module), JdkDir, JavaFlags, javaSrc, formatting
     )
 
     write(out, toSExp(config).replaceAll("\r\n", "\n") + "\n")

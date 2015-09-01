@@ -13,8 +13,7 @@ case class EnsimeConfig(
   javaHome: File,
   javaFlags: List[String],
   javaSrc: Option[File],
-  formatting: Option[IFormattingPreferences],
-  raw: String
+  formatting: Option[IFormattingPreferences]
 )
 
 case class EnsimeModule(

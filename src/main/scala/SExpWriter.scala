@@ -56,7 +56,6 @@ object SExpFormatter {
  :compiler-args ${ssToSExp(c.compilerArgs)}
  ${toSExp(c.formatting)}
  :subprojects ${msToSExp(c.modules.values)}
- ${c.raw}
 )"""
 
   // a lot of legacy key names and conventions
