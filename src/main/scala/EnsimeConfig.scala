@@ -21,7 +21,7 @@ case class EnsimeModule(
   name: String,
   mainRoots: Set[File],
   testRoots: Set[File],
-  target: File,
+  targets: Set[File],
   testTargets: Set[File],
   dependsOnNames: Set[String],
   compileJars: Set[File],

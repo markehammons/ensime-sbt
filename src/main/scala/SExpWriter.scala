@@ -62,9 +62,8 @@ object SExpFormatter {
   // a lot of legacy key names and conventions
   def toSExp(m: EnsimeModule): String = s"""(
    :name ${toSExp(m.name)}
-   :module-name ${toSExp(m.name)}
    :source-roots ${fsToSExp((m.mainRoots ++ m.testRoots))}
-   :target ${toSExp(m.target)}
+   :targets ${fsToSExp(m.targets)}
    :test-targets ${fsToSExp(m.testTargets)}
    :depends-on-modules ${ssToSExp(m.dependsOnNames)}
    :compile-deps ${fsToSExp(m.compileJars)}
