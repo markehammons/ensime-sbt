@@ -18,17 +18,17 @@ case class EnsimeConfig(
 )
 
 case class EnsimeModule(
-    name: String,
-    mainRoots: Set[File],
-    testRoots: Set[File],
-    target: File,
-    testTargets: Set[File],
-    dependsOnNames: Set[String],
-    compileJars: Set[File],
-    runtimeJars: Set[File],
-    testJars: Set[File],
-    sourceJars: Set[File],
-    docJars: Set[File]
+  name: String,
+  mainRoots: Set[File],
+  testRoots: Set[File],
+  target: File,
+  testTargets: Set[File],
+  dependsOnNames: Set[String],
+  compileJars: Set[File],
+  runtimeJars: Set[File],
+  testJars: Set[File],
+  sourceJars: Set[File],
+  docJars: Set[File]
 ) {
 
   def dependencies(implicit lookup: String => EnsimeModule): Set[EnsimeModule] =

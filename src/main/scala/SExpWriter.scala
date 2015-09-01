@@ -34,7 +34,7 @@ object SExpFormatter {
   def toSExp(b: Boolean): String = if (b) "t" else "nil"
 
   def toSExp(o: Option[IFormattingPreferences]): String = o match {
-    case None => ""
+    case None                                => ""
     case Some(f) if f.preferencesMap.isEmpty => ""
     case Some(f) => f.preferencesMap.map {
       case (desc, v: Boolean) =>

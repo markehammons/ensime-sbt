@@ -27,7 +27,7 @@ trait CommandSupport {
     def runOpt(implicit pr: ProjectRef, bs: BuildStructure, s: State): Option[A] =
       EvaluateTask(bs, key, s, pr).map(_._2) match {
         case Some(Value(v)) => Some(v)
-        case _ => None
+        case _              => None
       }
   }
 

@@ -1,3 +1,5 @@
+import scalariform.formatter.preferences._
+
 name := "ensime-sbt"
 
 organization := "org.ensime"
@@ -20,7 +22,9 @@ scalacOptions in Compile ++= Seq(
 // regressions / bugfixes in upstream.
 addSbtPlugin("org.scalariform" %% "sbt-scalariform" % "1.4.0")
 
-//scalariformSettings
+scalariformSettings
+
+ScalariformKeys.preferences := FormattingPreferences().setPreference(AlignSingleLineCaseStatements, true)
 
 publishMavenStyle := true
 

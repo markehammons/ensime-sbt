@@ -13,9 +13,10 @@ import SExpFormatter._
 import com.typesafe.sbt.SbtScalariform.ScalariformKeys
 import scalariform.formatter.preferences.IFormattingPreferences
 
-/** Conventional way to define importable keys for an AutoPlugin.
-  * Note that EnsimePlugin.autoImport == Imports
-  */
+/**
+ * Conventional way to define importable keys for an AutoPlugin.
+ * Note that EnsimePlugin.autoImport == Imports
+ */
 object Imports {
   object EnsimeKeys {
     val name = SettingKey[String]("name of the ENSIME project")
@@ -56,9 +57,9 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
       "-Ywarn-value-discard",
       "-Xfuture"
     ) ++ {
-      if (scalaVersion.value.startsWith("2.11")) Seq("-Ywarn-unused-import")
-      else Nil
-    },
+        if (scalaVersion.value.startsWith("2.11")) Seq("-Ywarn-unused-import")
+        else Nil
+      },
     EnsimeKeys.additionalSExp := ""
   )
 
@@ -150,9 +151,11 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
   }
 
   def projectData(project: ResolvedProject)(
-    implicit projectRef: ProjectRef,
+    implicit
+    projectRef: ProjectRef,
     buildStruct: BuildStructure,
-    state: State): EnsimeModule = {
+    state: State
+  ): EnsimeModule = {
     log.info(s"ENSIME processing ${project.id} (${name.gimme})")
 
     def sourcesFor(config: Configuration) = {
@@ -171,11 +174,13 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     // run these once for performance
     val updateReports = List(
       (update in Test).runOpt,
-      (update in IntegrationTest).runOpt).flatten
+      (update in IntegrationTest).runOpt
+    ).flatten
 
     val updateClassifiersReports = List(
       (updateClassifiers in Test).runOpt,
-      (updateClassifiers in IntegrationTest).runOpt).flatten
+      (updateClassifiers in IntegrationTest).runOpt
+    ).flatten
 
     val myDoc = (artifactPath in (Compile, packageDoc)).gimmeOpt
 
@@ -213,7 +218,8 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
     EnsimeModule(
       project.id, mainSources, testSources, mainTarget, testTargets, deps,
-      mainJars, runtimeJars, testJars, jarSrcs, jarDocs)
+      mainJars, runtimeJars, testJars, jarSrcs, jarDocs
+    )
   }
 
   // WORKAROUND: https://github.com/typelevel/scala/issues/75
@@ -227,11 +233,11 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     sys.props.get("java.home").map(new File(_).getParent),
     sys.props.get("java.home")
   ).flatten.filter { n =>
-    new File(n + "/lib/tools.jar").exists
-  }.headOption.map(new File(_)).getOrElse(
-    throw new FileNotFoundException(
-      """Could not automatically find the JDK/lib/tools.jar.
+      new File(n + "/lib/tools.jar").exists
+    }.headOption.map(new File(_)).getOrElse(
+      throw new FileNotFoundException(
+        """Could not automatically find the JDK/lib/tools.jar.
       |You must explicitly set JDK_HOME or JAVA_HOME.""".stripMargin
+      )
     )
-  )
 }
