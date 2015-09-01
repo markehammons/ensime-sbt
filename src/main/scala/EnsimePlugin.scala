@@ -19,7 +19,8 @@ import scalariform.formatter.preferences.IFormattingPreferences
 object Imports {
   object EnsimeKeys {
     val name = SettingKey[String]("name of the ENSIME project")
-    val compilerArgs = TaskKey[Seq[String]]("arguments for the presentation compiler")
+    val compilerArgs = TaskKey[Seq[String]]("arguments for the presentation compiler, extracted from the compiler flags.")
+    val additionalCompilerArgs = SettingKey[Seq[String]]("additional arguments for the presentation compiler, e.g. for additional warnings.")
     val additionalSExp = TaskKey[String]("raw SExp to include in the output")
   }
 }
@@ -44,6 +45,20 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
   override lazy val projectSettings = Seq(
     commands += ensimeCommand,
     EnsimeKeys.compilerArgs := (scalacOptions in Compile).value,
+    EnsimeKeys.additionalCompilerArgs := Seq(
+      "-feature",
+      "-deprecation",
+      "-Xlint",
+      "-Yinline-warnings",
+      "-Yno-adapted-args",
+      "-Ywarn-dead-code",
+      "-Ywarn-numeric-widen",
+      "-Ywarn-value-discard",
+      "-Xfuture"
+    ) ++ {
+      if (scalaVersion.value.startsWith("2.11")) Seq("-Ywarn-unused-import")
+      else Nil
+    },
     EnsimeKeys.additionalSExp := ""
   )
 
@@ -89,7 +104,10 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
       if (modules.size == 1) modules.head._2.name
       else root.getAbsoluteFile.getName
     }
-    val compilerArgs = (EnsimeKeys.compilerArgs in Compile).run.toList
+    val compilerArgs = {
+      (EnsimeKeys.compilerArgs in Compile).run.toList ++
+        (EnsimeKeys.additionalCompilerArgs in Compile).gimme
+    }.distinct
     val scalaV = (scalaVersion in Compile).gimme
     val javaH = (javaHome in Compile).gimme.getOrElse(JdkDir)
     val javaSrc = file(javaH.getAbsolutePath + "/src.zip") match {
