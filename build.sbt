@@ -8,6 +8,8 @@ version := "0.1.8-SNAPSHOT"
 
 sbtPlugin := true
 
+fork := true
+
 scalacOptions in Compile ++= Seq(
   "-encoding", "UTF-8", "-target:jvm-1.6", "-feature", "-deprecation",
   "-Xfatal-warnings",

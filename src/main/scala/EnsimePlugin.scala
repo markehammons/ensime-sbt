@@ -20,6 +20,8 @@ import scalariform.formatter.preferences.IFormattingPreferences
 object Imports {
   object EnsimeKeys {
     val name = SettingKey[String]("name of the ENSIME project")
+    val debuggingFlag = SettingKey[String]("JVM flags to enable remote debugging of forked tasks")
+    val debuggingPort = SettingKey[Int]("port for remote debugging of forked tasks")
     val compilerArgs = TaskKey[Seq[String]]("arguments for the presentation compiler, extracted from the compiler flags.")
     val additionalCompilerArgs = SettingKey[Seq[String]]("additional arguments for the presentation compiler, e.g. for additional warnings.")
     val additionalSExp = TaskKey[String]("raw SExp to include in the output")
@@ -43,8 +45,13 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
   lazy val ensimeCommand = Command.command("gen-ensime")(genEnsime)
 
+  lazy val debuggingOnCommand = Command.command("debugging-on")(toggleDebugging(true))
+  lazy val debuggingOffCommand = Command.command("debugging-off")(toggleDebugging(false))
+
   override lazy val projectSettings = Seq(
-    commands += ensimeCommand,
+    commands ++= Seq(ensimeCommand, debuggingOnCommand, debuggingOffCommand),
+    EnsimeKeys.debuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
+    EnsimeKeys.debuggingPort := 5005,
     EnsimeKeys.compilerArgs := (scalacOptions in Compile).value,
     EnsimeKeys.additionalCompilerArgs := Seq(
       "-feature",
@@ -63,15 +70,31 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     EnsimeKeys.additionalSExp := ""
   )
 
-  def genEnsime(state: State): State = {
-    implicit val s = state
-    val provider = state.configuration.provider
+  def toggleDebugging(enable: Boolean): State => State = { implicit state: State =>
+    val extracted = Project.extract(state)
 
-    // val sbtScalaVersion = provider.scalaProvider.version
-    // val sbtInstance = ScalaInstance(sbtScalaVersion, provider.scalaProvider.launcher)
-    // val sbtProject = BuildPaths.projectStandard(state.baseDir)
-    // val sbtOut = BuildPaths.crossPath(BuildPaths.outputDirectory(sbtProject), sbtInstance)
+    implicit val pr = extracted.currentRef
+    implicit val bs = extracted.structure
 
+    if (enable) {
+      val port = EnsimeKeys.debuggingPort.gimme
+      log.warn("Enabling debugging for all forked processes")
+      log.info("Only one JVM can use the port and it will await a connection before proceeding.")
+    }
+
+    val newSettings = extracted.structure.allProjectRefs map { proj =>
+      val orig = (javaOptions in proj).run
+      val debugging = ((EnsimeKeys.debuggingFlag in proj).gimme + (EnsimeKeys.debuggingPort in proj).gimme)
+      val rewritten =
+        if (enable) { orig :+ debugging }
+        else { orig.diff(List(debugging)) }
+
+      (javaOptions in proj) := rewritten
+    }
+    extracted.append(newSettings, state)
+  }
+
+  def genEnsime: State => State = { implicit state: State =>
     val extracted = Project.extract(state)
     implicit val pr = extracted.currentRef
     implicit val bs = extracted.structure
