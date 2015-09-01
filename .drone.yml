@@ -1,0 +1,10 @@
+image: ensime/ensime:latest
+
+script:
+  - sbt ++$SCALA_VERSION compile &&
+    if [ -n "$SONATYPE_USERNAME" ] && [ -n "$SONATYPE_PASSWORD" ] ; then
+      sbt ++$SCALA_VERSION publish ;
+    fi
+
+env:
+  - SCALA_VERSION=2.10.5
