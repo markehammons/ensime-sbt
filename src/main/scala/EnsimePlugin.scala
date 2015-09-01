@@ -117,8 +117,17 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
         log.warn(s"No Java sources detected in $javaH (your ENSIME experience will not be as good as it could be.)")
         None
     }
-    val javaFlags = ManagementFactory.getRuntimeMXBean.
-      getInputArguments.asScala.toList
+    val javaFlags = {
+      // WORKAROUND https://github.com/ensime/ensime-sbt/issues/91
+      val raw = ManagementFactory.getRuntimeMXBean.getInputArguments.asScala.toList.map {
+        case "-Xss1M" => "-Xss2m"
+        case flag     => flag
+      }
+      raw.find { flag => flag.startsWith("-Xss") } match {
+        case Some(has) => raw
+        case None      => "-Xss2m" :: raw
+      }
+    }
     val raw = (EnsimeKeys.additionalSExp in Compile).run
 
     val formatting = (ScalariformKeys.preferences in Compile).gimmeOpt
