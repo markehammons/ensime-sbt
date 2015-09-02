@@ -19,36 +19,36 @@ import scalariform.formatter.preferences.IFormattingPreferences
  */
 object Imports {
   object EnsimeKeys {
-    val name = SettingKey[String]("Name of the ENSIME project")
-    val debuggingFlag = SettingKey[String]("JVM flag to enable remote debugging of forked tasks.")
-    val debuggingPort = SettingKey[Int]("Port for remote debugging of forked tasks.")
-    val compilerArgs = TaskKey[Seq[String]]("Arguments for the presentation compiler, extracted from the compiler flags.")
-    val additionalCompilerArgs = SettingKey[Seq[String]]("Additional arguments for the presentation compiler.")
+    // for gen-ensime
+    val name = SettingKey[String](
+      "Name of the ENSIME project"
+    )
+    val compilerArgs = TaskKey[Seq[String]](
+      "Arguments for the presentation compiler, extracted from the compiler flags."
+    )
+    val additionalCompilerArgs = SettingKey[Seq[String]](
+      "Additional arguments for the presentation compiler."
+    )
+
+    // for gen-ensime-meta
+    val compilerMetaArgs = TaskKey[Seq[String]](
+      "Arguments for the meta-project presentation compiler (not possible to extract)."
+    )
+    val additionalMetaCompilerArgs = SettingKey[Seq[String]](
+      "Additional arguments for the meta-project presentation compiler."
+    )
+
+    // for debugging
+    val debuggingFlag = SettingKey[String](
+      "JVM flag to enable remote debugging of forked tasks."
+    )
+    val debuggingPort = SettingKey[Int](
+      "Port for remote debugging of forked tasks."
+    )
   }
 }
 
 object EnsimePlugin extends AutoPlugin with CommandSupport {
-
-  lazy val ensimeCommand = Command.command(
-    "gen-ensime",
-    "Generate a .ensime for the project.", ""
-  )(genEnsime)
-  lazy val ensimeProjectCommand = Command.command(
-    "gen-ensime-project",
-    "Generate a project/.ensime for the build definition.", ""
-  )(genEnsimeProject)
-
-  lazy val debuggingOnCommand = Command.command(
-    "debugging",
-    "Add debugging flags to all forked JVM processes.", ""
-  )(toggleDebugging(true))
-  // it would be good if debugging-off was automatically triggered
-  // https://stackoverflow.com/questions/32350617
-  lazy val debuggingOffCommand = Command.command(
-    "debugging-off",
-    "Remove debugging flags from all forked JVM processes.", ""
-  )(toggleDebugging(false))
-
   // ensures compiler settings are loaded before us
   override def requires = plugins.JvmPlugin
   override def trigger = allRequirements
@@ -56,34 +56,44 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
   val autoImport = Imports
 
   override lazy val projectSettings = Seq(
-    // people expect C-c to Do The Right Thing in debugging
-    // http://stackoverflow.com/questions/5137460/
-    cancelable in Global := true,
-    commands ++= Seq(
-      ensimeCommand, ensimeProjectCommand,
-      debuggingOnCommand, debuggingOffCommand
-    ),
+    commands += Command.command("gen-ensime", "Generate a .ensime for the project.", "")(genEnsime),
+    commands += Command.command("gen-ensime-meta", "Generate a project/.ensime for the meta-project.", "")(genEnsimeMeta),
+    commands += Command.command("debugging", "Add debugging flags to all forked JVM processes.", "")(toggleDebugging(true)),
+    commands += Command.command("debugging-off", "Remove debugging flags from all forked JVM processes.", "")(toggleDebugging(false)),
+
     EnsimeKeys.debuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
     EnsimeKeys.debuggingPort := 5005,
     EnsimeKeys.compilerArgs := (scalacOptions in Compile).value,
-    EnsimeKeys.additionalCompilerArgs := Seq(
-      "-feature",
-      "-deprecation",
-      "-Xlint",
-      "-Yinline-warnings",
-      "-Yno-adapted-args",
-      "-Ywarn-dead-code",
-      "-Ywarn-numeric-widen",
-      "-Ywarn-value-discard",
-      "-Xfuture"
-    ) ++ {
-        CrossVersion.partialVersion(scalaVersion.value) match {
-          case Some((2, v)) if v >= 11 => Seq("-Ywarn-unused-import")
-          case _                       => Nil
-        }
-      }
+    EnsimeKeys.additionalCompilerArgs := defaultCompilerFlags(scalaVersion.value),
+    // FIXME: how do we get the scalacOptions for the meta project?
+    // http://stackoverflow.com/questions/32353251
+    EnsimeKeys.compilerMetaArgs := Seq(), //(scalacOptions in Compile).value,
+    EnsimeKeys.additionalMetaCompilerArgs := defaultCompilerFlags(Properties.versionNumberString),
+
+    // people expect C-c to Do The Right Thing in debugging
+    // http://stackoverflow.com/questions/5137460/
+    cancelable in Global := true
   )
 
+  def defaultCompilerFlags(scalaVersion: String): Seq[String] = Seq(
+    "-feature",
+    "-deprecation",
+    "-Xlint",
+    "-Yinline-warnings",
+    "-Yno-adapted-args",
+    "-Ywarn-dead-code",
+    "-Ywarn-numeric-widen",
+    "-Ywarn-value-discard",
+    "-Xfuture"
+  ) ++ {
+      CrossVersion.partialVersion(scalaVersion) match {
+        case Some((2, v)) if v >= 11 => Seq("-Ywarn-unused-import")
+        case _                       => Nil
+      }
+    }
+
+  // it would be good if debugging-off was automatically triggered
+  // https://stackoverflow.com/questions/32350617
   def toggleDebugging(enable: Boolean): State => State = { implicit state: State =>
     val extracted = Project.extract(state)
 
@@ -143,11 +153,11 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
       else root.getAbsoluteFile.getName
     }
     val compilerArgs = {
-      (EnsimeKeys.compilerArgs in Compile).run.toList ++
-        (EnsimeKeys.additionalCompilerArgs in Compile).gimme
+      EnsimeKeys.compilerArgs.run.toList ++
+        EnsimeKeys.additionalCompilerArgs.gimme
     }.distinct
-    val scalaV = (scalaVersion in Compile).gimme
-    val javaH = (javaHome in Compile).gimme.getOrElse(JdkDir)
+    val scalaV = scalaVersion.gimme
+    val javaH = javaHome.gimme.getOrElse(JdkDir)
     val javaSrc = file(javaH.getAbsolutePath + "/src.zip") match {
       case f if f.exists => Some(f)
       case _ =>
@@ -155,7 +165,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
         None
     }
 
-    val formatting = (ScalariformKeys.preferences in Compile).gimmeOpt
+    val formatting = ScalariformKeys.preferences.gimmeOpt
 
     val config = EnsimeConfig(
       root, cacheDir, name, scalaV, compilerArgs,
@@ -271,7 +281,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     )
   }
 
-  def genEnsimeProject: State => State = { implicit state: State =>
+  def genEnsimeMeta: State => State = { implicit state: State =>
     val extracted = Project.extract(state)
 
     implicit val pr = extracted.currentRef
@@ -307,11 +317,12 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     val out = root / ".ensime"
     val cacheDir = root / ".ensime_cache"
     val name = EnsimeKeys.name.gimmeOpt.getOrElse {
-      file(Properties.userDir).getName + "-project"
+      file(Properties.userDir).getName + "-meta"
     }
+
     val compilerArgs = {
-      (EnsimeKeys.compilerArgs in Compile).run.toList ++
-        (EnsimeKeys.additionalCompilerArgs in Compile).gimme
+      EnsimeKeys.compilerMetaArgs.run.toList ++
+        EnsimeKeys.additionalMetaCompilerArgs.gimme
     }.distinct
     val scalaV = Properties.versionNumberString
     val javaSrc = JdkDir / "src.zip" match {
@@ -319,7 +330,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
       case _             => None
     }
 
-    val formatting = (ScalariformKeys.preferences in Compile).gimmeOpt
+    val formatting = ScalariformKeys.preferences.gimmeOpt
 
     val module = EnsimeModule(
       name, Set(root), Set.empty, targets.toSet, Set.empty, Set.empty,
