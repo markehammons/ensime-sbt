@@ -1,17 +1,16 @@
 package org.ensime
 
-import sbt._
-import Keys._
-import IO._
-import complete.Parsers._
-import collection.immutable.SortedMap
-import collection.JavaConverters._
-import java.lang.management.ManagementFactory
-import scala.util.Properties
-import scala.util._
-import java.io.FileNotFoundException
+import Imports._
 import SExpFormatter._
 import com.typesafe.sbt.SbtScalariform.ScalariformKeys
+import java.io.FileNotFoundException
+import java.lang.management.ManagementFactory
+import sbt._
+import sbt.IO._
+import sbt.Keys._
+import sbt.complete.Parsers._
+import scala.collection.JavaConverters._
+import scala.util._
 import scalariform.formatter.preferences.IFormattingPreferences
 
 /**
@@ -20,37 +19,46 @@ import scalariform.formatter.preferences.IFormattingPreferences
  */
 object Imports {
   object EnsimeKeys {
-    val name = SettingKey[String]("name of the ENSIME project")
-    val debuggingFlag = SettingKey[String]("JVM flags to enable remote debugging of forked tasks")
-    val debuggingPort = SettingKey[Int]("port for remote debugging of forked tasks")
-    val compilerArgs = TaskKey[Seq[String]]("arguments for the presentation compiler, extracted from the compiler flags.")
-    val additionalCompilerArgs = SettingKey[Seq[String]]("additional arguments for the presentation compiler, e.g. for additional warnings.")
+    val name = SettingKey[String]("Name of the ENSIME project")
+    val debuggingFlag = SettingKey[String]("JVM flag to enable remote debugging of forked tasks.")
+    val debuggingPort = SettingKey[Int]("Port for remote debugging of forked tasks.")
+    val compilerArgs = TaskKey[Seq[String]]("Arguments for the presentation compiler, extracted from the compiler flags.")
+    val additionalCompilerArgs = SettingKey[Seq[String]]("Additional arguments for the presentation compiler.")
   }
 }
 
 object EnsimePlugin extends AutoPlugin with CommandSupport {
 
-  val autoImport = Imports
+  lazy val ensimeCommand = Command.command(
+    "gen-ensime",
+    "Generate a .ensime for the project.", ""
+  )(genEnsime)
+  lazy val ensimeProjectCommand = Command.command(
+    "gen-ensime-project",
+    "Generate a project/.ensime for the build definition.", ""
+  )(genEnsimeProject)
 
-  // Ensures the underlying base SBT plugin settings are loaded prior to Ensime.
-  // This is important otherwise the `compilerArgs` would not be able to
-  // depend on `scalacOptions in Compile` (becuase they wouldn't be set yet)
+  lazy val debuggingOnCommand = Command.command(
+    "debugging",
+    "Add debugging flags to all forked JVM processes.", ""
+  )(toggleDebugging(true))
+  // it would be good if debugging-off was automatically triggered
+  // https://stackoverflow.com/questions/32350617
+  lazy val debuggingOffCommand = Command.command(
+    "debugging-off",
+    "Remove debugging flags from all forked JVM processes.", ""
+  )(toggleDebugging(false))
+
+  // ensures compiler settings are loaded before us
   override def requires = plugins.JvmPlugin
-
-  // Automatically enable the plugin so the user doesn't have to `enablePlugins`
-  // in their projects' build.sbt
   override def trigger = allRequirements
 
-  import autoImport._
-
-  lazy val ensimeCommand = Command.command("gen-ensime")(genEnsime)
-
-  lazy val ensimeProjectCommand = Command.command("gen-ensime-project")(genEnsimeProject)
-
-  lazy val debuggingOnCommand = Command.command("debugging-on")(toggleDebugging(true))
-  lazy val debuggingOffCommand = Command.command("debugging-off")(toggleDebugging(false))
+  val autoImport = Imports
 
   override lazy val projectSettings = Seq(
+    // people expect C-c to Do The Right Thing in debugging
+    // http://stackoverflow.com/questions/5137460/
+    cancelable in Global := true,
     commands ++= Seq(
       ensimeCommand, ensimeProjectCommand,
       debuggingOnCommand, debuggingOffCommand
@@ -69,8 +77,10 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
       "-Ywarn-value-discard",
       "-Xfuture"
     ) ++ {
-        if (scalaVersion.value.startsWith("2.11")) Seq("-Ywarn-unused-import")
-        else Nil
+        CrossVersion.partialVersion(scalaVersion.value) match {
+          case Some((2, v)) if v >= 11 => Seq("-Ywarn-unused-import")
+          case _                       => Nil
+        }
       }
   )
 
