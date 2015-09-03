@@ -1,5 +1,6 @@
 build:
   image: ensime/ensime:latest
+  pull: true
   environment:
     - SCALA_VERSION=2.10.5
   commands:
