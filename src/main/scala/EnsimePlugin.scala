@@ -83,7 +83,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     "-Yno-adapted-args",
     "-Ywarn-dead-code",
     "-Ywarn-numeric-widen",
-    "-Ywarn-value-discard",
+    //"-Ywarn-value-discard", // more annoying than useful
     "-Xfuture"
   ) ++ {
       CrossVersion.partialVersion(scalaVersion) match {
