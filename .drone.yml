@@ -2,6 +2,8 @@ build:
   image: ensime/ensime:latest
   pull: true
   environment:
+    - SONATYPE_USERNAME=$$SONATYPE_USERNAME
+    - SONATYPE_PASSWORD=$$SONATYPE_PASSWORD
     - SCALA_VERSION=2.10.5
   commands:
     - sbt ++$SCALA_VERSION compile &&
