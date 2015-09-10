@@ -6,7 +6,7 @@ build:
     - SONATYPE_PASSWORD=$$SONATYPE_PASSWORD
     - SCALA_VERSION=2.10.5
   commands:
-    - sbt ++$SCALA_VERSION compile &&
-      if [ -n "$SONATYPE_USERNAME" ] && [ -n "$SONATYPE_PASSWORD" ] ; then
+    - sbt ++$SCALA_VERSION compile
+    - if [ "$CI_REPO" = "ensime-sbt/master" ] ; then
         sbt ++$SCALA_VERSION publish ;
       fi
