@@ -23,6 +23,25 @@ Note that downloading and resolving the sources and javadocs can take some time 
 
 (Copied from [EnsimePlugin.scala](https://github.com/ensime/ensime-sbt/blob/master/src/main/scala/EnsimePlugin.scala#L59))
 
+### Debugging Example
+
+If you do not `fork` your main methods and tests from `sbt` you may be able to attach a remote debugger to the entire session by starting like `sbt -jvm-debug 1337` (check the docs of your `sbt` script, we strongly recommend using [paulp's sbt-extras](https://github.com/paulp/sbt-extras)). However, the vast majority of projects enabled forking and that is when `ensime-sbt`'s `debugging` is useful. 
+
+This sample session shows how easy it is to remotely debug a forked test:
+
+```
+crossbuild ~/Projects/ensime-server sbt
+> debugging
+[warn] Enabling debugging for all forked processes
+[info] Only one JVM can use the port and it will await a connection before proceeding.
+> jerk/test-only *JerkFormatsSpec
+Listening for transport dt_socket at address: 5005
+```
+
+at which point, the test will hang until you connect a remote debugger to port 5005. When you are finished debugging, cancel the test or let it run to completion, and then type `debugging-off`.
+
+Note that by `sbt`'s defaults, `C-c` will not cancel a running subprocess. As this is counter-intuitive, this plugin enables `C-c` by setting `cancelable in Global := true` so that you don't have to. Emacs users should recall that in order to send a control sequence to the `sbt-mode` subprocess, prefix the command with `C-c C-l`.
+
 ## Customise
 
 Customising [EnsimeKeys](https://github.com/ensime/ensime-sbt/blob/master/src/main/scala/EnsimePlugin.scala#L21) is done via the usual sbt mechanism, e.g. insert the following into `~/.sbt/0.13/ensime.sbt`
