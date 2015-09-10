@@ -7,6 +7,6 @@ build:
     - SCALA_VERSION=2.10.5
   commands:
     - sbt ++$SCALA_VERSION compile
-    - if [ "$CI_REPO" = "ensime-sbt/master" ] ; then
+    - if [ "$CI_BRANCH" = "master" ] ; then
         sbt ++$SCALA_VERSION publish ;
       fi
