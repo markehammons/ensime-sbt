@@ -40,7 +40,9 @@ Listening for transport dt_socket at address: 5005
 
 at which point, the test will hang until you connect a remote debugger to port 5005. When you are finished debugging, cancel the test or let it run to completion, and then type `debugging-off`.
 
-Note that by `sbt`'s defaults, `C-c` will not cancel a running subprocess. As this is counter-intuitive, this plugin enables `C-c` by setting `cancelable in Global := true` so that you don't have to. Emacs users should recall that in order to send a control sequence to the `sbt-mode` subprocess, prefix the command with `C-c C-l`.
+Note: If you'd like to debug using ensime-emacs, first set your breakpoints, then use ensime-db-attach to connect.
+
+Also note: By `sbt`'s defaults, `C-c` will not cancel a running subprocess. As this is counter-intuitive, this plugin enables `C-c` by setting `cancelable in Global := true` so that you don't have to. Emacs users should recall that in order to send a control sequence to the `sbt-mode` subprocess, prefix the command with `C-c C-l`.
 
 ## Customise
 
