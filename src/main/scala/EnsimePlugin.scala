@@ -68,11 +68,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     // FIXME: how do we get the scalacOptions for the meta project?
     // http://stackoverflow.com/questions/32353251
     EnsimeKeys.compilerMetaArgs := Seq(), //(scalacOptions in Compile).value,
-    EnsimeKeys.additionalMetaCompilerArgs := defaultCompilerFlags(Properties.versionNumberString),
-
-    // people expect C-c to Do The Right Thing in debugging
-    // http://stackoverflow.com/questions/5137460/
-    cancelable in Global := true
+    EnsimeKeys.additionalMetaCompilerArgs := defaultCompilerFlags(Properties.versionNumberString)
   )
 
   def defaultCompilerFlags(scalaVersion: String): Seq[String] = Seq(

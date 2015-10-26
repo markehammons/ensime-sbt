@@ -12,6 +12,14 @@ addSbtPlugin("org.ensime" % "ensime-sbt" % "0.2.0")
 
 **Check that again**, if you incorrectly used `~/.sbt/0.13/plugins.sbt` you'll get an sbt resolution error, it really has to be in the `plugins` folder.
 
+You are also recommended to add the following to your `~/.sbt/0.13/global.sbt`
+
+```scala
+cancelable in Global := true
+```
+
+so that `C-c` will (usually) terminate an application running under debugging (note that in Emacs [`sbt-mode` this is `C-c C-c`](https://github.com/hvesalai/sbt-mode/issues/24)).
+
 ## Commands
 
 * `gen-ensime` --- Generate a `.ensime` for the project.
