@@ -51,7 +51,7 @@ object SExpFormatter {
  :name "${c.name}"
  :java-home ${toSExp(c.javaHome)}
  :java-flags ${ssToSExp(c.javaFlags)}
- :reference-source-roots ${fsToSExp(c.javaSrc.toIterable)}
+ :reference-source-roots ${fsToSExp(c.javaSrc)}
  :scala-version ${toSExp(c.scalaVersion)}
  :compiler-args ${ssToSExp(c.compilerArgs)}
  ${toSExp(c.formatting)}

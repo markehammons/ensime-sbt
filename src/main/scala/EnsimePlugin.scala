@@ -45,6 +45,13 @@ object Imports {
     val debuggingPort = SettingKey[Int](
       "Port for remote debugging of forked tasks."
     )
+
+    val unmanagedSourceArchives = SettingKey[Seq[File]](
+      "Source jars (and zips) to complement unmanagedClasspath. May be set for the project and its submodules."
+    )
+    val unmanagedJavadocArchives = SettingKey[Seq[File]](
+      "Documentation jars (and zips) to complement unmanagedClasspath. May only be set for submodules."
+    )
   }
 }
 
@@ -68,7 +75,9 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     // FIXME: how do we get the scalacOptions for the meta project?
     // http://stackoverflow.com/questions/32353251
     EnsimeKeys.compilerMetaArgs := Seq(), //(scalacOptions in Compile).value,
-    EnsimeKeys.additionalMetaCompilerArgs := defaultCompilerFlags(Properties.versionNumberString)
+    EnsimeKeys.additionalMetaCompilerArgs := defaultCompilerFlags(Properties.versionNumberString),
+    EnsimeKeys.unmanagedSourceArchives := Nil,
+    EnsimeKeys.unmanagedJavadocArchives := Nil
   )
 
   def defaultCompilerFlags(scalaVersion: String): Seq[String] = Seq(
@@ -154,12 +163,14 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     }.distinct
     val scalaV = scalaVersion.gimme
     val javaH = javaHome.gimme.getOrElse(JdkDir)
-    val javaSrc = file(javaH.getAbsolutePath + "/src.zip") match {
-      case f if f.exists => Some(f)
-      case _ =>
-        log.warn(s"No Java sources detected in $javaH (your ENSIME experience will not be as good as it could be.)")
-        None
-    }
+    val javaSrc = {
+      file(javaH.getAbsolutePath + "/src.zip") match {
+        case f if f.exists => List(f)
+        case _ =>
+          log.warn(s"No Java sources detected in $javaH (your ENSIME experience will not be as good as it could be.)")
+          Nil
+      }
+    } ++ EnsimeKeys.unmanagedSourceArchives.gimme
 
     val formatting = ScalariformKeys.preferences.gimmeOpt
 
@@ -227,6 +238,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
       if (phase == Test || sourcesFor(phase).nonEmpty) (update in phase).runOpt
       else Set.empty
     }
+    // these are ludicrously slow https://github.com/sbt/sbt/issues/1930
     val updateClassifiersReports = {
       testPhases.flatMap { phase =>
         if (phase == Test || sourcesFor(phase).nonEmpty) (updateClassifiers in phase).runOpt
@@ -249,12 +261,12 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     def jarSrcsFor(config: Configuration) = updateClassifiersReports.flatMap(_.select(
       configuration = configurationFilter(filter | config.name.toLowerCase),
       artifact = artifactFilter(classifier = Artifact.SourceClassifier)
-    )).toSet
+    )).toSet ++ (EnsimeKeys.unmanagedSourceArchives in projectRef).gimme
 
     def jarDocsFor(config: Configuration) = updateClassifiersReports.flatMap(_.select(
       configuration = configurationFilter(filter | config.name.toLowerCase),
       artifact = artifactFilter(classifier = Artifact.DocClassifier)
-    )).toSet
+    )).toSet ++ (EnsimeKeys.unmanagedJavadocArchives in projectRef).gimme
 
     val mainSources = filteredSources(sourcesFor(Compile) ++ sourcesFor(Provided) ++ sourcesFor(Optional))
     val testSources = filteredSources(testPhases.flatMap(sourcesFor))
@@ -322,8 +334,8 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     }.distinct
     val scalaV = Properties.versionNumberString
     val javaSrc = JdkDir / "src.zip" match {
-      case f if f.exists => Some(f)
-      case _             => None
+      case f if f.exists => List(f)
+      case _             => Nil
     }
 
     val formatting = ScalariformKeys.preferences.gimmeOpt
