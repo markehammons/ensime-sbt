@@ -7,10 +7,18 @@ This [sbt](http://github.com/sbt/sbt) plugin generates a `.ensime` file and prov
 Add these lines to `~/.sbt/0.13/plugins/plugins.sbt` as opposed to `project/plugins.sbt` (the decision to use ENSIME is per-user, rather than per-project):
 
 ```scala
-addSbtPlugin("org.ensime" % "ensime-sbt" % "0.2.0")
+addSbtPlugin("org.ensime" % "ensime-sbt" % "0.2.1")
 ```
 
 **Check that again**, if you incorrectly used `~/.sbt/0.13/plugins.sbt` you'll get an sbt resolution error, it really has to be in the `plugins` folder.
+
+You are also recommended to add the following to your `~/.sbt/0.13/global.sbt`
+
+```scala
+cancelable in Global := true
+```
+
+so that `C-c` will (usually) terminate an application running under debugging (note that in Emacs [`sbt-mode` this is `C-c C-c`](https://github.com/hvesalai/sbt-mode/issues/24)).
 
 ## Commands
 

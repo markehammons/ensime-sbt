@@ -45,6 +45,13 @@ object Imports {
     val debuggingPort = SettingKey[Int](
       "Port for remote debugging of forked tasks."
     )
+
+    val unmanagedSourceArchives = SettingKey[Seq[File]](
+      "Source jars (and zips) to complement unmanagedClasspath. May be set for the project and its submodules."
+    )
+    val unmanagedJavadocArchives = SettingKey[Seq[File]](
+      "Documentation jars (and zips) to complement unmanagedClasspath. May only be set for submodules."
+    )
   }
 }
 
@@ -69,10 +76,8 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     // http://stackoverflow.com/questions/32353251
     EnsimeKeys.compilerMetaArgs := Seq(), //(scalacOptions in Compile).value,
     EnsimeKeys.additionalMetaCompilerArgs := defaultCompilerFlags(Properties.versionNumberString),
-
-    // people expect C-c to Do The Right Thing in debugging
-    // http://stackoverflow.com/questions/5137460/
-    cancelable in Global := true
+    EnsimeKeys.unmanagedSourceArchives := Nil,
+    EnsimeKeys.unmanagedJavadocArchives := Nil
   )
 
   def defaultCompilerFlags(scalaVersion: String): Seq[String] = Seq(
@@ -102,16 +107,16 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
     if (enable) {
       val port = EnsimeKeys.debuggingPort.gimme
-      log.warn("Enabling debugging for all forked processes")
-      log.info("Only one JVM can use the port and it will await a connection before proceeding.")
+      log.warn(s"Enabling debugging for all forked processes on port $port")
+      log.info("Only one process can use the port and it will await a connection before proceeding.")
     }
 
     val newSettings = extracted.structure.allProjectRefs map { proj =>
       val orig = (javaOptions in proj).run
-      val debugging = ((EnsimeKeys.debuggingFlag in proj).gimme + (EnsimeKeys.debuggingPort in proj).gimme)
-      val rewritten =
-        if (enable) { orig :+ debugging }
-        else { orig.diff(List(debugging)) }
+      val debugFlags = ((EnsimeKeys.debuggingFlag in proj).gimme + (EnsimeKeys.debuggingPort in proj).gimme)
+      val withoutDebug = orig.diff(List(debugFlags))
+      val withDebug = withoutDebug :+ debugFlags
+      val rewritten = if (enable) withDebug else withoutDebug
 
       (javaOptions in proj) := rewritten
     }
@@ -158,12 +163,14 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     }.distinct
     val scalaV = scalaVersion.gimme
     val javaH = javaHome.gimme.getOrElse(JdkDir)
-    val javaSrc = file(javaH.getAbsolutePath + "/src.zip") match {
-      case f if f.exists => Some(f)
-      case _ =>
-        log.warn(s"No Java sources detected in $javaH (your ENSIME experience will not be as good as it could be.)")
-        None
-    }
+    val javaSrc = {
+      file(javaH.getAbsolutePath + "/src.zip") match {
+        case f if f.exists => List(f)
+        case _ =>
+          log.warn(s"No Java sources detected in $javaH (your ENSIME experience will not be as good as it could be.)")
+          Nil
+      }
+    } ++ EnsimeKeys.unmanagedSourceArchives.gimme
 
     val formatting = ScalariformKeys.preferences.gimmeOpt
 
@@ -231,6 +238,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
       if (phase == Test || sourcesFor(phase).nonEmpty) (update in phase).runOpt
       else Set.empty
     }
+    // these are ludicrously slow https://github.com/sbt/sbt/issues/1930
     val updateClassifiersReports = {
       testPhases.flatMap { phase =>
         if (phase == Test || sourcesFor(phase).nonEmpty) (updateClassifiers in phase).runOpt
@@ -253,12 +261,12 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     def jarSrcsFor(config: Configuration) = updateClassifiersReports.flatMap(_.select(
       configuration = configurationFilter(filter | config.name.toLowerCase),
       artifact = artifactFilter(classifier = Artifact.SourceClassifier)
-    )).toSet
+    )).toSet ++ (EnsimeKeys.unmanagedSourceArchives in projectRef).gimme
 
     def jarDocsFor(config: Configuration) = updateClassifiersReports.flatMap(_.select(
       configuration = configurationFilter(filter | config.name.toLowerCase),
       artifact = artifactFilter(classifier = Artifact.DocClassifier)
-    )).toSet
+    )).toSet ++ (EnsimeKeys.unmanagedJavadocArchives in projectRef).gimme
 
     val mainSources = filteredSources(sourcesFor(Compile) ++ sourcesFor(Provided) ++ sourcesFor(Optional))
     val testSources = filteredSources(testPhases.flatMap(sourcesFor))
@@ -326,8 +334,8 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     }.distinct
     val scalaV = Properties.versionNumberString
     val javaSrc = JdkDir / "src.zip" match {
-      case f if f.exists => Some(f)
-      case _             => None
+      case f if f.exists => List(f)
+      case _             => Nil
     }
 
     val formatting = ScalariformKeys.preferences.gimmeOpt
