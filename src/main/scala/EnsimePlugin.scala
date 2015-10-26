@@ -98,16 +98,16 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
     if (enable) {
       val port = EnsimeKeys.debuggingPort.gimme
-      log.warn("Enabling debugging for all forked processes")
-      log.info("Only one JVM can use the port and it will await a connection before proceeding.")
+      log.warn(s"Enabling debugging for all forked processes on port $port")
+      log.info("Only one process can use the port and it will await a connection before proceeding.")
     }
 
     val newSettings = extracted.structure.allProjectRefs map { proj =>
       val orig = (javaOptions in proj).run
-      val debugging = ((EnsimeKeys.debuggingFlag in proj).gimme + (EnsimeKeys.debuggingPort in proj).gimme)
-      val rewritten =
-        if (enable) { orig :+ debugging }
-        else { orig.diff(List(debugging)) }
+      val debugFlags = ((EnsimeKeys.debuggingFlag in proj).gimme + (EnsimeKeys.debuggingPort in proj).gimme)
+      val withoutDebug = orig.diff(List(debugFlags))
+      val withDebug = withoutDebug :+ debugFlags
+      val rewritten = if (enable) withDebug else withoutDebug
 
       (javaOptions in proj) := rewritten
     }
