@@ -252,7 +252,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
     def jarsFor(config: Configuration) = updateReport.flatMap(_.select(
       configuration = configurationFilter(filter | config.name.toLowerCase),
-      artifact = artifactFilter(classifier = "", extension = Artifact.DefaultExtension)
+      artifact = artifactFilter(extension = Artifact.DefaultExtension)
     )).toSet
 
     def unmanagedJarsFor(config: Configuration) =
