@@ -18,6 +18,12 @@ You are also recommended to add the following to your `~/.sbt/0.13/global.sbt` (
 cancelable in Global := true
 ```
 
+Please note your projects' `project/build.properties` need to use a version newer that 0.13.5 of sbt due to a [breaking AutoPlugin change](https://github.com/ensime/ensime-server/issues/672).
+
+```
+sbt.version=0.13.8
+```
+
 ## Commands
 
 * `gen-ensime` --- Generate a `.ensime` for the project.
