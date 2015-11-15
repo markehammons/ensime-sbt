@@ -54,7 +54,7 @@ at which point, the test will hang until you connect a remote debugger to port 5
 
 Note: If you'd like to debug using ensime-emacs, first set your breakpoints, then use ensime-db-attach to connect.
 
-Also note: By `sbt`'s defaults, `C-c` will not cancel a running subprocess. As this is counter-intuitive, this plugin enables `C-c` by setting `cancelable in Global := true` so that you don't have to. Emacs users should recall that in order to send a control sequence to the `sbt-mode` subprocess, prefix the command with `C-c C-l`.
+Also note: By `sbt`'s defaults, `C-c` will not cancel a running subprocess. As this is counter-intuitive, this plugin enables `C-c` by setting `cancelable in Global := true` so that you don't have to. Emacs users should recall that in order to send a control sequence to the `sbt-mode` subprocess, first run `sbt-clear` (bound to `C-c C-z` by default) then `C-c`. i.e. `C-c C-z C-c C-c` (yes, you probably want to bind this to something easier).
 
 ## Customise
 
