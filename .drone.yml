@@ -4,9 +4,13 @@ build:
   environment:
     - SONATYPE_USERNAME=$$SONATYPE_USERNAME
     - SONATYPE_PASSWORD=$$SONATYPE_PASSWORD
-    - SCALA_VERSION=2.10.5
+    - SCALA_VERSION=2.10.6
   commands:
+    - git log | head -n 20
     - sbt ++$SCALA_VERSION compile
+    - sbt ++$SCALA_VERSION publishLocal ;
+      sbt ++$SCALA_VERSION prepareTesting ;
+      testing/test-github.sh ensime ensime-server 8ae9c30631030a9e828426fc021a7eb80c71cd42
     - if [ "$CI_BRANCH" = "master" ] ; then
         sbt ++$SCALA_VERSION publish ;
       fi
