@@ -7,3 +7,5 @@ project/target
 
 .ensime*
 .sbtopts
+
+ensime-sbt-install

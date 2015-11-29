@@ -1,10 +1,13 @@
 import scalariform.formatter.preferences._
+import com.typesafe.sbt.SbtScalariform.ScalariformKeys
 
 name := "ensime-sbt"
 
 organization := "org.ensime"
 
 version := "0.2.2-SNAPSHOT"
+
+scalaVersion := "2.10.6"
 
 sbtPlugin := true
 
@@ -22,7 +25,7 @@ scalacOptions in Compile ++= Seq(
 // upgrades to the underlying scalariform that the project may be
 // using, resulting in unintended reformatting as a result of
 // regressions / bugfixes in upstream.
-addSbtPlugin("org.scalariform" %% "sbt-scalariform" % "1.4.0")
+addSbtPlugin("org.scalariform" %% "sbt-scalariform" % "1.5.1")
 
 scalariformSettings
 
@@ -31,6 +34,13 @@ ScalariformKeys.preferences := FormattingPreferences().setPreference(AlignSingle
 publishMavenStyle := true
 
 publishArtifact in Test := false
+
+
+lazy val prepareTesting = taskKey[Unit]("Installs this version of ensime-sbt globally.")
+prepareTesting := {
+  val v = version.value
+  IO.write(file("ensime-sbt-install"), "\n" + s"""addSbtPlugin("org.ensime" % "ensime-sbt" % "$v")""" + "\n\n")
+}
 
 pomIncludeRepository := { _ => false }
 

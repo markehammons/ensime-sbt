@@ -513,15 +513,15 @@ object SExpFormatter {
 
   def fsToSExp(ss: Iterable[File]): String =
     if (ss.isEmpty) "nil"
-    else ss.map(toSExp).mkString("(", " ", ")")
+    else ss.toSeq.sortBy(_.getPath).map(toSExp).mkString("(", " ", ")")
 
   def ssToSExp(ss: Iterable[String]): String =
     if (ss.isEmpty) "nil"
-    else ss.map(toSExp).mkString("(", " ", ")")
+    else ss.toSeq.sorted.map(toSExp).mkString("(", " ", ")")
 
   def msToSExp(ss: Iterable[EnsimeModule]): String =
     if (ss.isEmpty) "nil"
-    else ss.map(toSExp).mkString("(", " ", ")")
+    else ss.toSeq.sortBy(_.name).map(toSExp).mkString("(", " ", ")")
 
   def fToSExp(key: String, op: Option[File]): String =
     op.map { f => s":$key ${toSExp(f)}" }.getOrElse("")
