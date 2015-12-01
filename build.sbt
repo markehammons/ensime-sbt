@@ -5,7 +5,7 @@ name := "ensime-sbt"
 
 organization := "org.ensime"
 
-version := "0.2.2"
+version := "0.3.0-SNAPSHOT"
 
 scalaVersion := "2.10.6"
 
