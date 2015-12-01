@@ -91,6 +91,10 @@ object Imports {
       "Documentation jars (and zips) to complement unmanagedClasspath. May only be set for submodules."
     )
 
+    val megaUpdate = TaskKey[Map[ProjectRef, (UpdateReport, UpdateReport)]](
+      "Runs the aggregated UpdateReport for `update' and `updateClassifiers' respectively."
+    )
+
   }
 }
 
@@ -118,7 +122,20 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     EnsimeKeys.unmanagedSourceArchives := Nil,
     EnsimeKeys.unmanagedJavadocArchives := Nil,
     EnsimeKeys.includeSourceJars := true,
-    EnsimeKeys.includeDocJars := true
+    EnsimeKeys.includeDocJars := true,
+    EnsimeKeys.megaUpdate <<= Keys.state.flatMap { implicit s =>
+      val projs = Project.structure(s).allProjectRefs
+      log.info("ENSIME update. Please vote for https://github.com/sbt/sbt/issues/2266")
+      for {
+        updateReport <- update.forAllProjects(s, projs)
+        _ = log.info("ENSIME updateClassifiers. Please vote for https://github.com/sbt/sbt/issues/1930")
+        updateClassifiersReport <- updateClassifiers.forAllProjects(s, projs)
+      } yield {
+        projs.map { p =>
+          (p, (updateReport(p), updateClassifiersReport(p)))
+        }.toMap
+      }
+    }
   )
 
   def defaultCompilerFlags(scalaVersion: String): Seq[String] = Seq(
@@ -173,9 +190,12 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
       Project.getProjectForReference(ref, bs).map((ref, _))
     }.toMap
 
+    val updateReports = EnsimeKeys.megaUpdate.run
+
     implicit val rawModules = projects.collect {
       case (ref, proj) =>
-        val module = projectData(proj)(ref, bs, state)
+        val (updateReport, updateClassifiersReport) = updateReports(ref)
+        val module = projectData(proj, updateReport, updateClassifiersReport)(ref, bs, state)
         (module.name, module)
     }.toMap
 
@@ -242,7 +262,11 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     sources.filter(_.exists())
   }
 
-  def projectData(project: ResolvedProject)(
+  def projectData(
+    project: ResolvedProject,
+    updateReport: UpdateReport,
+    updateClassifiersReport: UpdateReport
+  )(
     implicit
     projectRef: ProjectRef,
     buildStruct: BuildStructure,
@@ -272,47 +296,32 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     def targetForOpt(config: Configuration) =
       (classDirectory in config).gimmeOpt
 
-    // these are really slow to run, so try to minimise their invocations
-    val updateReport = testPhases.flatMap { phase =>
-      // the test reports include the "main" report
-      // optimisation: don't run extended phases if we don't have a source root
-      if (phase == Test || sourcesFor(phase).nonEmpty) (update in phase).runOpt
-      else Set.empty
-    }
-    // these are ludicrously slow https://github.com/sbt/sbt/issues/1930
-    val updateClassifiersReports = {
-      testPhases.flatMap { phase =>
-        if (phase == Test || sourcesFor(phase).nonEmpty) (updateClassifiers in phase).runOpt
-        else Set.empty
-      }
-    }
-
     val myDoc = (artifactPath in (Compile, packageDoc)).gimmeOpt
 
     val filter = if (sbtPlugin.gimme) "provided" else ""
 
-    def jarsFor(config: Configuration) = updateReport.flatMap(_.select(
+    def jarsFor(config: Configuration) = updateReport.select(
       configuration = configurationFilter(filter | config.name.toLowerCase),
       artifact = artifactFilter(extension = Artifact.DefaultExtension)
-    )).toSet
+    ).toSet
 
     def unmanagedJarsFor(config: Configuration) =
       (unmanagedJars in config).runOpt.map(_.map(_.data).toSet).getOrElse(Set())
 
     def jarSrcsFor(config: Configuration) = if (EnsimeKeys.includeSourceJars.gimme) {
-      updateClassifiersReports.flatMap(_.select(
+      updateClassifiersReport.select(
         configuration = configurationFilter(filter | config.name.toLowerCase),
         artifact = artifactFilter(classifier = Artifact.SourceClassifier)
-      )).toSet ++ (EnsimeKeys.unmanagedSourceArchives in projectRef).gimme
+      ).toSet ++ (EnsimeKeys.unmanagedSourceArchives in projectRef).gimme
     } else {
       (EnsimeKeys.unmanagedSourceArchives in projectRef).gimme
     }
 
     def jarDocsFor(config: Configuration) = if (EnsimeKeys.includeDocJars.gimme) {
-      updateClassifiersReports.flatMap(_.select(
+      updateClassifiersReport.select(
         configuration = configurationFilter(filter | config.name.toLowerCase),
         artifact = artifactFilter(classifier = Artifact.DocClassifier)
-      )).toSet ++ (EnsimeKeys.unmanagedJavadocArchives in projectRef).gimme
+      ).toSet ++ (EnsimeKeys.unmanagedJavadocArchives in projectRef).gimme
     } else {
       (EnsimeKeys.unmanagedJavadocArchives in projectRef).gimme
     }
@@ -497,6 +506,11 @@ trait CommandSupport {
         case Some(Value(v)) => Some(v)
         case _              => None
       }
+
+    def forAllProjects(state: State, projects: Seq[ProjectRef]): Task[Map[ProjectRef, A]] = {
+      val tasks = projects.flatMap(p => key.in(p).get(Project.structure(state).data).map(_.map(it => (p, it))))
+      std.TaskExtra.joinTasks(tasks).join.map(_.toMap)
+    }
   }
 
 }
