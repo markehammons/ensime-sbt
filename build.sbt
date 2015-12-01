@@ -11,6 +11,8 @@ scalaVersion := "2.10.6"
 
 sbtPlugin := true
 
+ivyLoggingLevel := UpdateLogging.Quiet
+
 fork := true
 
 scalacOptions in Compile ++= Seq(
