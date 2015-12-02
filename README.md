@@ -23,7 +23,7 @@ cancelable in Global := true
 If you use [sbt-scalariform](https://github.com/sbt/sbt-scalariform), and wish to use the same settings in ENSIME, you must set:
 
 ```scala
-EnsimeKeys.scalariform := ScalariformKeys.preferences
+EnsimeKeys.scalariform := ScalariformKeys.preferences.value
 ```
 
 This is not automatic to avoid forcing an update in the version of scalariform that your project may use.
