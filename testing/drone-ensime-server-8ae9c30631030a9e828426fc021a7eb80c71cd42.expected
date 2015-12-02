@@ -7,7 +7,7 @@
  :reference-source-roots ("/usr/lib/jvm/java-1.6.0-openjdk-amd64/src.zip")
  :scala-version "2.11.7"
  :compiler-args ("-Xfatal-warnings" "-Xfuture" "-Xlint" "-Yinline-warnings" "-Yno-adapted-args" "-Ywarn-dead-code" "-Ywarn-numeric-widen" "-Ywarn-unused-import" "-deprecation" "-encoding" "-feature" "-language:implicitConversions" "-language:postfixOps" "-target:jvm-1.6" "UTF-8")
- :formatting-prefs (:spacesAroundMultiImports t :doubleIndentClassDeclaration t)
+ :formatting-prefs nil
  :subprojects ((
    :name "api"
    :source-roots ("/drone/src/github.com/ensime/ensime-sbt/testing/ensime-server-8ae9c30631030a9e828426fc021a7eb80c71cd42/api/src/main/scala" "/drone/src/github.com/ensime/ensime-sbt/testing/ensime-server-8ae9c30631030a9e828426fc021a7eb80c71cd42/api/src/test/scala")
