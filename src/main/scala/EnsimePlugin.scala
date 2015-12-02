@@ -34,7 +34,6 @@ package org.ensime
 
 import Imports._
 import SExpFormatter._
-import com.typesafe.sbt.SbtScalariform.ScalariformKeys
 import java.io.FileNotFoundException
 import java.lang.management.ManagementFactory
 import sbt._
@@ -43,7 +42,7 @@ import sbt.Keys._
 import sbt.complete.Parsers._
 import scala.collection.JavaConverters._
 import scala.util._
-import scalariform.formatter.preferences.IFormattingPreferences
+import scalariform.formatter.preferences._
 
 /**
  * Conventional way to define importable keys for an AutoPlugin.
@@ -62,10 +61,13 @@ object Imports {
       "Additional arguments for the presentation compiler."
     )
     val includeSourceJars = settingKey[Boolean](
-      "Should source jars be included in the .ensime file"
+      "Should source jars be included in the .ensime file."
     )
     val includeDocJars = settingKey[Boolean](
-      "Should doc jars be included in the .ensime file"
+      "Should doc jars be included in the .ensime file."
+    )
+    val scalariform = settingKey[IFormattingPreferences](
+      "Scalariform formatting preferences to use in ENSIME."
     )
 
     // for gen-ensime-meta
@@ -123,6 +125,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     EnsimeKeys.unmanagedJavadocArchives := Nil,
     EnsimeKeys.includeSourceJars := true,
     EnsimeKeys.includeDocJars := true,
+    EnsimeKeys.scalariform := FormattingPreferences(),
     EnsimeKeys.megaUpdate <<= Keys.state.flatMap { implicit s =>
       val projs = Project.structure(s).allProjectRefs
       log.info("ENSIME update. Please vote for https://github.com/sbt/sbt/issues/2266")
@@ -233,7 +236,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
       }
     } ++ EnsimeKeys.unmanagedSourceArchives.gimme
 
-    val formatting = ScalariformKeys.preferences.gimmeOpt
+    val formatting = EnsimeKeys.scalariform.gimmeOpt
 
     val config = EnsimeConfig(
       root, cacheDir, name, scalaV, compilerArgs,
@@ -395,7 +398,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
       case _             => Nil
     }
 
-    val formatting = ScalariformKeys.preferences.gimmeOpt
+    val formatting = EnsimeKeys.scalariform.gimmeOpt
 
     val module = EnsimeModule(
       name, Set(root), Set.empty, targets.toSet, Set.empty, Set.empty,
@@ -546,14 +549,14 @@ object SExpFormatter {
   def toSExp(b: Boolean): String = if (b) "t" else "nil"
 
   def toSExp(o: Option[IFormattingPreferences]): String = o match {
-    case None                                => ""
-    case Some(f) if f.preferencesMap.isEmpty => ""
+    case None                                => "nil"
+    case Some(f) if f.preferencesMap.isEmpty => "nil"
     case Some(f) => f.preferencesMap.map {
       case (desc, v: Boolean) =>
         s":${desc.key} ${toSExp(v)}"
       case (desc, v: Int) =>
         s":${desc.key} $v"
-    }.mkString(":formatting-prefs (", " ", ")")
+    }.mkString("(", " ", ")")
   }
 
   // a lot of legacy key names and conventions
@@ -566,7 +569,7 @@ object SExpFormatter {
  :reference-source-roots ${fsToSExp(c.javaSrc)}
  :scala-version ${toSExp(c.scalaVersion)}
  :compiler-args ${ssToSExp(c.compilerArgs)}
- ${toSExp(c.formatting)}
+ :formatting-prefs ${toSExp(c.formatting)}
  :subprojects ${msToSExp(c.modules.values)}
 )"""
 

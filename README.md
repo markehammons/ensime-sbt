@@ -20,10 +20,19 @@ You are also recommended to add the following to your `~/.sbt/0.13/global.sbt` (
 cancelable in Global := true
 ```
 
-Please note your projects' `project/build.properties` need to use a version newer that 0.13.5 of sbt due to a [breaking AutoPlugin change](https://github.com/ensime/ensime-server/issues/672).
+If you use [sbt-scalariform](https://github.com/sbt/sbt-scalariform), and wish to use the same settings in ENSIME, you must set:
+
+```scala
+EnsimeKeys.scalariform := ScalariformKeys.preferences
+```
+
+This is not automatic to avoid forcing an update in the version of scalariform that your project may use.
+
+
+Please note your projects' `project/build.properties` needs to use a version newer than 0.13.5 of sbt due to a [breaking AutoPlugin change](https://github.com/ensime/ensime-server/issues/672), e.g.
 
 ```
-sbt.version=0.13.8
+sbt.version=0.13.9
 ```
 
 ## Commands

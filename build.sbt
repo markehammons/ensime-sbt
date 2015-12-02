@@ -5,7 +5,7 @@ name := "ensime-sbt"
 
 organization := "org.ensime"
 
-version := "0.3.0-SNAPSHOT"
+version := "0.2.3-SNAPSHOT"
 
 scalaVersion := "2.10.6"
 
@@ -23,11 +23,8 @@ scalacOptions in Compile ++= Seq(
   //"-P:wartremover:traverser:org.brianmckenna.wartremover.warts.Unsafe"
 )
 
-// we depend on scalariform to read the settings this might result in
-// upgrades to the underlying scalariform that the project may be
-// using, resulting in unintended reformatting as a result of
-// regressions / bugfixes in upstream.
-addSbtPlugin("org.scalariform" %% "sbt-scalariform" % "1.5.1")
+// intentionally old version of scalariform: do not force an upgrade upon users
+libraryDependencies += "org.scalariform" %% "scalariform" % "0.1.4"
 
 scalariformSettings
 
