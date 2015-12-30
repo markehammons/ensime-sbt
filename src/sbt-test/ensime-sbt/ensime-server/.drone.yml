@@ -1,0 +1,57 @@
+build:
+  image: ensime/ensime:latest
+  pull: true
+  environment:
+    - SONATYPE_USERNAME=$$SONATYPE_USERNAME
+    - SONATYPE_PASSWORD=$$SONATYPE_PASSWORD
+    - EMACS=/opt/emacs-24.4/bin/emacs
+    - AKKA_TEST_TIMEFACTOR=10
+  commands:
+    - sbt ++$SCALA_VERSION gen-ensime ;
+      mkdir .ensime_cache ;
+      sbt ++$SCALA_VERSION clean test:compile it:compile doc ;
+      if [ $(git diff | wc -l) -ge 1 ] ; then
+        echo "Code formatting does not meet the project's standards:" ;
+        git --no-pager diff ;
+        exit 1 ;
+      fi
+    - sbt ++$SCALA_VERSION test it:test
+    - if [ "${SCALA_VERSION}" = "2.11.6" ] ; then
+        git clone --depth 1 https://github.com/ensime/ensime-emacs.git ensime-emacs ;
+        cd ensime-emacs ;
+        cask pkg-file ;
+        cask install ;
+        cask build ;
+        test/run_emacs_tests.sh ;
+      fi
+    - if [ -z "$CI_PULL_REQUEST" ] ; then
+        cd $CI_BUILD_DIR ;
+        sbt ++$SCALA_VERSION publish ;
+        sbt ++$SCALA_VERSION ensime/assembly ;
+        ccdecrypt .id_rsa.cpt -E SONATYPE_PASSWORD ;
+        chmod 0600 .id_rsa ;
+        scp -o StrictHostKeyChecking=no -i .id_rsa target/scala-*/*-assembly.jar typelevel@docs.typelevel.org:ensime.typelevel.org/ ;
+      fi
+
+# TODO https://github.com/ensime/ensime-server/issues/1091
+#    - if [ "${SCALA_VERSION}" = "2.11.6" ] ; then
+#        sbt ++$SCALA_VERSION clean ;
+#        sbt ++$SCALA_VERSION coverage test ;
+#        sbt ++$SCALA_VERSION coverage it:test ;
+#        sbt ++$SCALA_VERSION coverageAggregate ;
+#      fi
+
+matrix:
+  SCALA_VERSION:
+    - 2.11.6
+    - 2.10.4
+# 2.10.4 / 2.11.6 because that's what fommil uses at work :-D
+# EnsimeBuild tends to track latest stables
+
+deploy:
+  dockerhub:
+    token: $$DOCKER_TRIGGER_TOKEN
+    repo: ensime/ensime
+    when:
+      matrix:
+        SCALA_VERSION: 2.11.6
