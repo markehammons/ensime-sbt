@@ -1,0 +1,5 @@
+package pure;
+
+class NoScalaHere {
+    
+}
