@@ -70,6 +70,13 @@ object Imports {
       "Scalariform formatting preferences to use in ENSIME."
     )
 
+    val disableSourceMonitoring = settingKey[Boolean](
+      "Workaround temporary performance problems on large projects."
+    )
+    val disableClassMonitoring = settingKey[Boolean](
+      "Workaround temporary performance problems on large projects."
+    )
+
     // for gen-ensime-meta
     val compilerMetaArgs = TaskKey[Seq[String]](
       "Arguments for the meta-project presentation compiler (not possible to extract)."
@@ -119,6 +126,8 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     EnsimeKeys.compilerMetaArgs := Seq(), // https://github.com/ensime/ensime-sbt/issues/98
     EnsimeKeys.additionalMetaCompilerArgs := defaultCompilerFlags(Properties.versionNumberString),
     EnsimeKeys.scalariform := FormattingPreferences(),
+    EnsimeKeys.disableSourceMonitoring := false,
+    EnsimeKeys.disableClassMonitoring := false,
     EnsimeKeys.megaUpdate <<= Keys.state.flatMap { implicit s =>
       val projs = Project.structure(s).allProjectRefs
       log.info("ENSIME update. Please vote for https://github.com/sbt/sbt/issues/2266")
@@ -237,10 +246,13 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     } ++ EnsimeKeys.unmanagedSourceArchives.gimme
 
     val formatting = EnsimeKeys.scalariform.gimmeOpt
+    val disableSourceMonitoring = EnsimeKeys.disableSourceMonitoring.gimme
+    val disableClassMonitoring = EnsimeKeys.disableClassMonitoring.gimme
 
     val config = EnsimeConfig(
       root, cacheDir, name, scalaV, compilerArgs,
-      modules, javaH, JavaFlags, javaSrc, formatting
+      modules, javaH, JavaFlags, javaSrc, formatting,
+      disableSourceMonitoring, disableClassMonitoring
     )
 
     // workaround for Windows
@@ -407,7 +419,8 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
     val config = EnsimeConfig(
       root, cacheDir, name, scalaV, compilerArgs,
-      Map(module.name -> module), JdkDir, JavaFlags, javaSrc, formatting
+      Map(module.name -> module), JdkDir, JavaFlags, javaSrc, formatting,
+      false, false
     )
 
     write(out, toSExp(config).replaceAll("\r\n", "\n") + "\n")
@@ -458,7 +471,9 @@ case class EnsimeConfig(
   javaHome: File,
   javaFlags: List[String],
   javaSrc: List[File],
-  formatting: Option[IFormattingPreferences]
+  formatting: Option[IFormattingPreferences],
+  disableSourceMonitoring: Boolean,
+  disableClassMonitoring: Boolean
 )
 
 case class EnsimeModule(
@@ -570,6 +585,8 @@ object SExpFormatter {
  :scala-version ${toSExp(c.scalaVersion)}
  :compiler-args ${ssToSExp(c.compilerArgs)}
  :formatting-prefs ${toSExp(c.formatting)}
+ :disable-source-monitoring ${toSExp(c.disableSourceMonitoring)}
+ :disable-class-monitoring ${toSExp(c.disableClassMonitoring)}
  :subprojects ${msToSExp(c.modules.values)}
 )"""
 

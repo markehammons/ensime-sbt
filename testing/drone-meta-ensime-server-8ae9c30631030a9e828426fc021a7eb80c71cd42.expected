@@ -8,6 +8,8 @@
  :scala-version "2.10.5"
  :compiler-args ("-Xfuture" "-Xlint" "-Yinline-warnings" "-Yno-adapted-args" "-Ywarn-dead-code" "-Ywarn-numeric-widen" "-deprecation" "-feature")
  :formatting-prefs nil
+ :disable-source-monitoring nil
+ :disable-class-monitoring nil
  :subprojects ((
    :name "ensime-server-8ae9c30631030a9e828426fc021a7eb80c71cd42-meta"
    :source-roots ("/drone/src/github.com/ensime/ensime-sbt/testing/ensime-server-8ae9c30631030a9e828426fc021a7eb80c71cd42/project")
