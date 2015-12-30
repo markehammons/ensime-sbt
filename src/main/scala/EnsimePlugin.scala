@@ -57,7 +57,7 @@ object Imports {
     val compilerArgs = TaskKey[Seq[String]](
       "Arguments for the presentation compiler, extracted from the compiler flags."
     )
-    val additionalCompilerArgs = SettingKey[Seq[String]](
+    val additionalCompilerArgs = TaskKey[Seq[String]](
       "Additional arguments for the presentation compiler."
     )
     val includeSourceJars = settingKey[Boolean](
@@ -70,11 +70,18 @@ object Imports {
       "Scalariform formatting preferences to use in ENSIME."
     )
 
+    val disableSourceMonitoring = settingKey[Boolean](
+      "Workaround temporary performance problems on large projects."
+    )
+    val disableClassMonitoring = settingKey[Boolean](
+      "Workaround temporary performance problems on large projects."
+    )
+
     // for gen-ensime-meta
     val compilerMetaArgs = TaskKey[Seq[String]](
       "Arguments for the meta-project presentation compiler (not possible to extract)."
     )
-    val additionalMetaCompilerArgs = SettingKey[Seq[String]](
+    val additionalMetaCompilerArgs = TaskKey[Seq[String]](
       "Additional arguments for the meta-project presentation compiler."
     )
 
@@ -107,25 +114,20 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
   val autoImport = Imports
 
-  override lazy val projectSettings = Seq(
+  override lazy val buildSettings = Seq(
     commands += Command.command("gen-ensime", "Generate a .ensime for the project.", "")(genEnsime),
     commands += Command.command("gen-ensime-meta", "Generate a project/.ensime for the meta-project.", "")(genEnsimeMeta),
     commands += Command.command("debugging", "Add debugging flags to all forked JVM processes.", "")(toggleDebugging(true)),
     commands += Command.command("debugging-off", "Remove debugging flags from all forked JVM processes.", "")(toggleDebugging(false)),
-
     EnsimeKeys.debuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
     EnsimeKeys.debuggingPort := 5005,
     EnsimeKeys.compilerArgs := (scalacOptions in Compile).value,
     EnsimeKeys.additionalCompilerArgs := defaultCompilerFlags(scalaVersion.value),
-    // FIXME: how do we get the scalacOptions for the meta project?
-    // http://stackoverflow.com/questions/32353251
-    EnsimeKeys.compilerMetaArgs := Seq(), //(scalacOptions in Compile).value,
+    EnsimeKeys.compilerMetaArgs := Seq(), // https://github.com/ensime/ensime-sbt/issues/98
     EnsimeKeys.additionalMetaCompilerArgs := defaultCompilerFlags(Properties.versionNumberString),
-    EnsimeKeys.unmanagedSourceArchives := Nil,
-    EnsimeKeys.unmanagedJavadocArchives := Nil,
-    EnsimeKeys.includeSourceJars := true,
-    EnsimeKeys.includeDocJars := true,
     EnsimeKeys.scalariform := FormattingPreferences(),
+    EnsimeKeys.disableSourceMonitoring := false,
+    EnsimeKeys.disableClassMonitoring := false,
     EnsimeKeys.megaUpdate <<= Keys.state.flatMap { implicit s =>
       val projs = Project.structure(s).allProjectRefs
       log.info("ENSIME update. Please vote for https://github.com/sbt/sbt/issues/2266")
@@ -139,6 +141,13 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
         }.toMap
       }
     }
+  )
+
+  override lazy val projectSettings = Seq(
+    EnsimeKeys.unmanagedSourceArchives := Nil,
+    EnsimeKeys.unmanagedJavadocArchives := Nil,
+    EnsimeKeys.includeSourceJars := true,
+    EnsimeKeys.includeDocJars := true
   )
 
   def defaultCompilerFlags(scalaVersion: String): Seq[String] = Seq(
@@ -223,7 +232,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     }
     val compilerArgs = {
       EnsimeKeys.compilerArgs.run.toList ++
-        EnsimeKeys.additionalCompilerArgs.gimme
+        EnsimeKeys.additionalCompilerArgs.run
     }.distinct
     val scalaV = scalaVersion.gimme
     val javaH = javaHome.gimme.getOrElse(JdkDir)
@@ -237,10 +246,13 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     } ++ EnsimeKeys.unmanagedSourceArchives.gimme
 
     val formatting = EnsimeKeys.scalariform.gimmeOpt
+    val disableSourceMonitoring = EnsimeKeys.disableSourceMonitoring.gimme
+    val disableClassMonitoring = EnsimeKeys.disableClassMonitoring.gimme
 
     val config = EnsimeConfig(
       root, cacheDir, name, scalaV, compilerArgs,
-      modules, javaH, JavaFlags, javaSrc, formatting
+      modules, javaH, JavaFlags, javaSrc, formatting,
+      disableSourceMonitoring, disableClassMonitoring
     )
 
     // workaround for Windows
@@ -390,7 +402,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
     val compilerArgs = {
       EnsimeKeys.compilerMetaArgs.run.toList ++
-        EnsimeKeys.additionalMetaCompilerArgs.gimme
+        EnsimeKeys.additionalMetaCompilerArgs.run
     }.distinct
     val scalaV = Properties.versionNumberString
     val javaSrc = JdkDir / "src.zip" match {
@@ -407,7 +419,8 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
     val config = EnsimeConfig(
       root, cacheDir, name, scalaV, compilerArgs,
-      Map(module.name -> module), JdkDir, JavaFlags, javaSrc, formatting
+      Map(module.name -> module), JdkDir, JavaFlags, javaSrc, formatting,
+      false, false
     )
 
     write(out, toSExp(config).replaceAll("\r\n", "\n") + "\n")
@@ -458,7 +471,9 @@ case class EnsimeConfig(
   javaHome: File,
   javaFlags: List[String],
   javaSrc: List[File],
-  formatting: Option[IFormattingPreferences]
+  formatting: Option[IFormattingPreferences],
+  disableSourceMonitoring: Boolean,
+  disableClassMonitoring: Boolean
 )
 
 case class EnsimeModule(
@@ -570,6 +585,8 @@ object SExpFormatter {
  :scala-version ${toSExp(c.scalaVersion)}
  :compiler-args ${ssToSExp(c.compilerArgs)}
  :formatting-prefs ${toSExp(c.formatting)}
+ :disable-source-monitoring ${toSExp(c.disableSourceMonitoring)}
+ :disable-class-monitoring ${toSExp(c.disableClassMonitoring)}
  :subprojects ${msToSExp(c.modules.values)}
 )"""
 
