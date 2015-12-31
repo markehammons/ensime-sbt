@@ -16,6 +16,6 @@ build:
         exit 1 ;
       fi
     - sbt ++$SCALA_VERSION scripted ;
-    - if [ "$CI_BRANCH" = "master" ] ; then
+    - if [ -z "$CI_PULL_REQUEST" ] ; then
         sbt ++$SCALA_VERSION publish ;
       fi
