@@ -12,8 +12,17 @@ object EnsimeSbtTestSupport extends AutoPlugin with CommandSupport {
 
   override def trigger = allRequirements
 
+  private lazy val parser = complete.Parsers.spaceDelimited("<arg>")
   override lazy val buildSettings = Seq(
     commands += Command.args("ensimeExpect", "<args>")(ensimeExpect)
+  )
+
+  override lazy val projectSettings = Seq(
+    InputKey[Unit]("checkJavaOptions") := {
+      val args = parser.parsed.toList
+      val opts = javaOptions.value.toList.map(_.toString)
+      if (args != opts) throw new MessageOnlyException(s"$opts != $args")
+    }
   )
 
   // must be a Command to avoid recursing into aggregate projects
@@ -47,7 +56,7 @@ object EnsimeSbtTestSupport extends AutoPlugin with CommandSupport {
     val deltas = DiffUtils.diff(orig.asJava, expect.asJava).getDeltas.asScala
     if (!deltas.isEmpty) {
       // for local debugging
-      IO.write(file(Properties.userHome + "/ensime-got"), expect.mkString("\n"))
+      //IO.write(file(Properties.userHome + "/ensime-got"), expect.mkString("\n"))
       throw new MessageOnlyException(s".ensime diff: ${deltas.mkString("\n")}")
     }
 
