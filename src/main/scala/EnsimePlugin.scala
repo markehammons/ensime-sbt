@@ -545,7 +545,7 @@ object SExpFormatter {
 
   def fsToSExp(ss: Iterable[File]): String =
     if (ss.isEmpty) "nil"
-    else ss.toSeq.sortBy(_.getPath).map(toSExp).mkString("(", " ", ")")
+    else ss.toSeq.sortBy { f => f.getName + f.getPath }.map(toSExp).mkString("(", " ", ")")
 
   def ssToSExp(ss: Iterable[String]): String =
     if (ss.isEmpty) "nil"
