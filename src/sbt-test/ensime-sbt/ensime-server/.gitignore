@@ -1,0 +1,8 @@
+target/
+
+*.log
+
+.ensime*
+.sbtopts
+
+TAGS

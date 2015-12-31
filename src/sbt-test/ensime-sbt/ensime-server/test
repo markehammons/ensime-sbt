@@ -1,0 +1,4 @@
+> gen-ensime
+> ensimeExpect gen-ensime.expect .ensime
+> gen-ensime-meta
+> ensimeExpect gen-ensime-meta.expect project/.ensime
