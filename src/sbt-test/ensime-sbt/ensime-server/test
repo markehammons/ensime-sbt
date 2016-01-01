@@ -1,5 +1,9 @@
 > gen-ensime
 > ensimeExpect gen-ensime.expect .ensime
+> gen-ensime util
+> ensimeExpect util.gen-ensime.expect .ensime
+> gen-ensime swank jerk
+> ensimeExpect swank-jerk.gen-ensime.expect .ensime
 > gen-ensime-meta
 > ensimeExpect gen-ensime-meta.expect project/.ensime
 > core/checkJavaOptions -Xss2m -XX:MaxPermSize=256m -Xmx2g
