@@ -37,6 +37,9 @@ object SonatypeSupport {
         <connection>scm:git:git@github.com:${ ghUser }/${ ghRepo }.git</connection>
       </scm>
       <developers>
+        <developer>
+          <id>$ghUser</id>
+        </developer>
       </developers>
     )
   )
