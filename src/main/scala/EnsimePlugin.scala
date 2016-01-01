@@ -123,7 +123,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
   val EnsimeInternal = config("ensime-internal").hide
 
   override lazy val buildSettings = Seq(
-    commands += Command.command("gen-ensime", "Generate a .ensime for the project.", "")(genEnsime),
+    commands += Command.args("gen-ensime", "Generate a .ensime for the project.")(genEnsime),
     commands += Command.command("gen-ensime-meta", "Generate a project/.ensime for the meta-project.", "")(genEnsimeMeta),
     commands += Command.command("debugging", "Add debugging flags to all forked JVM processes.", "")(toggleDebugging(true)),
     commands += Command.command("debugging-off", "Remove debugging flags from all forked JVM processes.", "")(toggleDebugging(false)),
@@ -209,12 +209,29 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     extracted.append(newSettings, state)
   }
 
-  def genEnsime: State => State = { implicit state: State =>
+  def genEnsime: (State, Seq[String]) => State = { (state, args) =>
     val extracted = Project.extract(state)
+    implicit val st = state
     implicit val pr = extracted.currentRef
     implicit val bs = extracted.structure
 
-    val projects = bs.allProjectRefs.flatMap { ref =>
+    def transitiveProjects(ref: ProjectRef): Set[ProjectRef] = {
+      val proj = Project.getProjectForReference(ref, bs).get
+      Set(ref) ++ proj.dependencies.flatMap { dep =>
+        transitiveProjects(dep.project)
+      }
+    }
+
+    val active =
+      if (args.isEmpty) bs.allProjectRefs
+      else args.flatMap { name =>
+        val ref = bs.allProjectRefs.find(_.project == name).getOrElse {
+          throw new IllegalArgumentException(s"$name is not a valid project id")
+        }
+        transitiveProjects(ref)
+      }
+
+    val projects = active.flatMap { ref =>
       Project.getProjectForReference(ref, bs).map((ref, _))
     }.toMap
 

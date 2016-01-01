@@ -48,7 +48,9 @@ object EnsimeSbtBuild extends Build {
         // .jvmopts is ignored, simulate here
         "-XX:MaxPermSize=256m", "-Xmx2g", "-Xss2m"
       ),
-      scriptedBufferLog := false
+      scriptedBufferLog := false,
+      // WORKAROUND https://github.com/sbt/sbt/issues/2253
+      fullResolvers -= Resolver.jcenterRepo
     )
 
 }
