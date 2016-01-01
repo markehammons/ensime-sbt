@@ -77,6 +77,12 @@ object Imports {
       "Workaround temporary performance problems on large projects."
     )
 
+    // used to start the REPL and assembly jar bundles of ensime-server.
+    // intransitive because we don't need parser combinators, scala.xml or jline
+    val scalaCompilerJarModuleIDs = settingKey[Seq[ModuleID]](
+      "The artefacts to resolve for :scala-compiler-jars in gen-ensime."
+    )
+
     // for gen-ensime-meta
     val compilerMetaArgs = TaskKey[Seq[String]](
       "Arguments for the meta-project presentation compiler (not possible to extract)."
@@ -130,6 +136,12 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     EnsimeKeys.scalariform := FormattingPreferences(),
     EnsimeKeys.disableSourceMonitoring := false,
     EnsimeKeys.disableClassMonitoring := false,
+    EnsimeKeys.scalaCompilerJarModuleIDs := Seq(
+      "org.scala-lang" % "scala-compiler" % scalaVersion.value,
+      "org.scala-lang" % "scala-library" % scalaVersion.value,
+      "org.scala-lang" % "scala-reflect" % scalaVersion.value,
+      "org.scala-lang" % "scalap" % scalaVersion.value
+    ).map(_ % EnsimeInternal.name intransitive ()),
     EnsimeKeys.megaUpdate <<= Keys.state.flatMap { implicit s =>
       val projs = Project.structure(s).allProjectRefs
       log.info("ENSIME update. Please vote for https://github.com/sbt/sbt/issues/2266")
@@ -151,13 +163,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     EnsimeKeys.includeSourceJars := true,
     EnsimeKeys.includeDocJars := true,
     ivyConfigurations += EnsimeInternal,
-    libraryDependencies ++= Seq(
-      "org.scala-lang" % "scala-compiler" % scalaVersion.value,
-      "org.scala-lang" % "scala-library" % scalaVersion.value,
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-      "org.scala-lang" % "scalap" % scalaVersion.value
-    // intransitive because we don't need parser combinators, scala.xml or jline
-    ).map(_ % EnsimeInternal.name intransitive ())
+    libraryDependencies ++= EnsimeKeys.scalaCompilerJarModuleIDs.value
   )
 
   def defaultCompilerFlags(scalaVersion: String): Seq[String] = Seq(
@@ -203,12 +209,6 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     extracted.append(newSettings, state)
   }
 
-  def inferScalaCompilerJars(updateReport: UpdateReport): Set[File] =
-    updateReport.select(
-      configuration = configurationFilter(EnsimeInternal.name),
-      artifact = artifactFilter(extension = Artifact.DefaultExtension)
-    ).toSet
-
   def genEnsime: State => State = { implicit state: State =>
     val extracted = Project.extract(state)
     implicit val pr = extracted.currentRef
@@ -220,7 +220,10 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
     val updateReports = EnsimeKeys.megaUpdate.run
 
-    val scalaCompilerJars = inferScalaCompilerJars(updateReports.head._2._1)
+    val scalaCompilerJars = updateReports.head._2._1.select(
+      configuration = configurationFilter(EnsimeInternal.name),
+      artifact = artifactFilter(extension = Artifact.DefaultExtension)
+    ).toSet
 
     implicit val rawModules = projects.collect {
       case (ref, proj) =>
@@ -442,8 +445,11 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
       jars.toSet, Set.empty, Set.empty, srcs.toSet, docs.toSet
     )
 
-    // unfortunate, because it slows down the command
-    val scalaCompilerJars = inferScalaCompilerJars(update.run)
+    val scalaCompilerJars = jars.filter { file =>
+      val f = file.getName
+      f.contains("scala-library") | f.contains("scala-compiler") |
+        f.contains("scala-reflect") | f.contains("scalap")
+    }.toSet
 
     val config = EnsimeConfig(
       root, cacheDir,

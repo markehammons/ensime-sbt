@@ -39,6 +39,8 @@ object EnsimeSbtBuild extends Build {
       sbtPlugin := true,
       // intentionally old version of scalariform: do not force an upgrade upon users
       libraryDependencies += "org.scalariform" %% "scalariform" % "0.1.4",
+      // scalap needed for :scala-compiler-jars
+      libraryDependencies += "org.scala-lang" % "scalap" % scalaVersion.value,
       ScalariformKeys.preferences := FormattingPreferences().setPreference(AlignSingleLineCaseStatements, true),
       EnsimeKeys.scalariform := ScalariformKeys.preferences.value,
       scriptedLaunchOpts := Seq(
