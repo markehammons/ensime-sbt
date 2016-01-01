@@ -114,6 +114,8 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
   val autoImport = Imports
 
+  val EnsimeInternal = config("ensime-internal").hide
+
   override lazy val buildSettings = Seq(
     commands += Command.command("gen-ensime", "Generate a .ensime for the project.", "")(genEnsime),
     commands += Command.command("gen-ensime-meta", "Generate a project/.ensime for the meta-project.", "")(genEnsimeMeta),
@@ -147,7 +149,15 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     EnsimeKeys.unmanagedSourceArchives := Nil,
     EnsimeKeys.unmanagedJavadocArchives := Nil,
     EnsimeKeys.includeSourceJars := true,
-    EnsimeKeys.includeDocJars := true
+    EnsimeKeys.includeDocJars := true,
+    ivyConfigurations += EnsimeInternal,
+    libraryDependencies ++= Seq(
+      "org.scala-lang" % "scala-compiler" % scalaVersion.value,
+      "org.scala-lang" % "scala-library" % scalaVersion.value,
+      "org.scala-lang" % "scala-reflect" % scalaVersion.value,
+      "org.scala-lang" % "scalap" % scalaVersion.value
+    // intransitive because we don't need parser combinators, scala.xml or jline
+    ).map(_ % EnsimeInternal.name intransitive ())
   )
 
   def defaultCompilerFlags(scalaVersion: String): Seq[String] = Seq(
@@ -193,6 +203,12 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     extracted.append(newSettings, state)
   }
 
+  def inferScalaCompilerJars(updateReport: UpdateReport): Set[File] =
+    updateReport.select(
+      configuration = configurationFilter(EnsimeInternal.name),
+      artifact = artifactFilter(extension = Artifact.DefaultExtension)
+    ).toSet
+
   def genEnsime: State => State = { implicit state: State =>
     val extracted = Project.extract(state)
     implicit val pr = extracted.currentRef
@@ -203,6 +219,8 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     }.toMap
 
     val updateReports = EnsimeKeys.megaUpdate.run
+
+    val scalaCompilerJars = inferScalaCompilerJars(updateReports.head._2._1)
 
     implicit val rawModules = projects.collect {
       case (ref, proj) =>
@@ -250,7 +268,9 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     val disableClassMonitoring = EnsimeKeys.disableClassMonitoring.gimme
 
     val config = EnsimeConfig(
-      root, cacheDir, name, scalaV, compilerArgs,
+      root, cacheDir,
+      scalaCompilerJars,
+      name, scalaV, compilerArgs,
       modules, javaH, JavaFlags, javaSrc, formatting,
       disableSourceMonitoring, disableClassMonitoring
     )
@@ -313,10 +333,15 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
     val myDoc = (artifactPath in (Compile, packageDoc)).gimmeOpt
 
-    val filter = if (sbtPlugin.gimme) "provided" else ""
+    def configFilter(config: Configuration): ConfigurationFilter = {
+      val c = config.name.toLowerCase
+      val internal = EnsimeInternal.name
+      if (sbtPlugin.gimme) configurationFilter(("provided" | c) - internal)
+      else configurationFilter(c - internal)
+    }
 
     def jarsFor(config: Configuration) = updateReport.select(
-      configuration = configurationFilter(filter | config.name.toLowerCase),
+      configuration = configFilter(config),
       artifact = artifactFilter(extension = Artifact.DefaultExtension)
     ).toSet
 
@@ -325,7 +350,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
     def jarSrcsFor(config: Configuration) = if (EnsimeKeys.includeSourceJars.gimme) {
       updateClassifiersReport.select(
-        configuration = configurationFilter(filter | config.name.toLowerCase),
+        configuration = configFilter(config),
         artifact = artifactFilter(classifier = Artifact.SourceClassifier)
       ).toSet ++ (EnsimeKeys.unmanagedSourceArchives in projectRef).gimme
     } else {
@@ -334,7 +359,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
     def jarDocsFor(config: Configuration) = if (EnsimeKeys.includeDocJars.gimme) {
       updateClassifiersReport.select(
-        configuration = configurationFilter(filter | config.name.toLowerCase),
+        configuration = configFilter(config),
         artifact = artifactFilter(classifier = Artifact.DocClassifier)
       ).toSet ++ (EnsimeKeys.unmanagedJavadocArchives in projectRef).gimme
     } else {
@@ -417,8 +442,13 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
       jars.toSet, Set.empty, Set.empty, srcs.toSet, docs.toSet
     )
 
+    // unfortunate, because it slows down the command
+    val scalaCompilerJars = inferScalaCompilerJars(update.run)
+
     val config = EnsimeConfig(
-      root, cacheDir, name, scalaV, compilerArgs,
+      root, cacheDir,
+      scalaCompilerJars,
+      name, scalaV, compilerArgs,
       Map(module.name -> module), JdkDir, JavaFlags, javaSrc, formatting,
       false, false
     )
@@ -464,6 +494,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 case class EnsimeConfig(
   root: File,
   cacheDir: File,
+  scalaCompilerJars: Set[File],
   name: String,
   scalaVersion: String,
   compilerArgs: List[String],
@@ -578,6 +609,7 @@ object SExpFormatter {
   def toSExp(c: EnsimeConfig): String = s"""(
  :root-dir ${toSExp(c.root)}
  :cache-dir ${toSExp(c.cacheDir)}
+ :scala-compiler-jars ${fsToSExp(c.scalaCompilerJars)}
  :name "${c.name}"
  :java-home ${toSExp(c.javaHome)}
  :java-flags ${ssToSExp(c.javaFlags)}

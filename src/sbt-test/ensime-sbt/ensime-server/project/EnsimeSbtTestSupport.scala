@@ -56,7 +56,7 @@ object EnsimeSbtTestSupport extends AutoPlugin with CommandSupport {
     val deltas = DiffUtils.diff(orig.asJava, expect.asJava).getDeltas.asScala
     if (!deltas.isEmpty) {
       // for local debugging
-      //IO.write(file(Properties.userHome + "/ensime-got"), expect.mkString("\n"))
+      IO.write(file(Properties.userHome + "/ensime-got"), expect.mkString("\n"))
       throw new MessageOnlyException(s".ensime diff: ${deltas.mkString("\n")}")
     }
 
