@@ -37,7 +37,7 @@ sbt.version=0.13.9
 
 ## Commands
 
-* `gen-ensime` --- Generate a `.ensime` for the project.
+* `gen-ensime` --- Generate a `.ensime` for the project (takes space-separated parameters to restrict to subprojects).
 * `gen-ensime-project` --- Generate a `project/.ensime` for the project definition.
 * `debugging` --- Add debugging flags to all forked JVM processes.
 * `debugging-off` --- Remove debugging flags from all forked JVM processes.
