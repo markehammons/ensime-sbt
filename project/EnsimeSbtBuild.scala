@@ -9,6 +9,7 @@ import sbt.Keys._
 import sbt.ScriptedPlugin._
 import scalariform.formatter.preferences._
 import util.Properties
+import org.ensime.Imports.EnsimeKeys
 
 object EnsimeSbtBuild extends Build {
 
@@ -39,6 +40,7 @@ object EnsimeSbtBuild extends Build {
       // intentionally old version of scalariform: do not force an upgrade upon users
       libraryDependencies += "org.scalariform" %% "scalariform" % "0.1.4",
       ScalariformKeys.preferences := FormattingPreferences().setPreference(AlignSingleLineCaseStatements, true),
+      EnsimeKeys.scalariform := ScalariformKeys.preferences.value,
       scriptedLaunchOpts := Seq(
         "-Dplugin.version=" + version.value,
         // .jvmopts is ignored, simulate here

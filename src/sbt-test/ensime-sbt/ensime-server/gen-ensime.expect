@@ -1,6 +1,7 @@
 (
  :root-dir "BASE_DIR"
  :cache-dir "BASE_DIR/.ensime_cache"
+ :scala-compiler-jars ("IVY_DIR/cache/org.scala-lang/scala-compiler/jars/scala-compiler-2.11.7.jar" "IVY_DIR/cache/org.scala-lang/scala-library/jars/scala-library-2.11.7.jar" "IVY_DIR/cache/org.scala-lang/scala-reflect/jars/scala-reflect-2.11.7.jar" "IVY_DIR/cache/org.scala-lang/scalap/jars/scalap-2.11.7.jar")
  :name "ensime-server"
  :java-home "JDK_HOME"
  :java-flags ("-XX:MaxPermSize=256m" "-Xmx2g" "-Xss2m")
