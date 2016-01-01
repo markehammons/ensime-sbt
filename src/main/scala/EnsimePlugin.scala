@@ -83,12 +83,12 @@ object Imports {
       "The artefacts to resolve for :scala-compiler-jars in gen-ensime."
     )
 
-    // for gen-ensime-meta
-    val compilerMetaArgs = TaskKey[Seq[String]](
-      "Arguments for the meta-project presentation compiler (not possible to extract)."
+    // for gen-ensime-project
+    val compilerProjectArgs = TaskKey[Seq[String]](
+      "Arguments for the project definition presentation compiler (not possible to extract)."
     )
-    val additionalMetaCompilerArgs = TaskKey[Seq[String]](
-      "Additional arguments for the meta-project presentation compiler."
+    val additionalProjectCompilerArgs = TaskKey[Seq[String]](
+      "Additional arguments for the project definition presentation compiler."
     )
 
     // for debugging
@@ -124,15 +124,15 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
   override lazy val buildSettings = Seq(
     commands += Command.args("gen-ensime", "Generate a .ensime for the project.")(genEnsime),
-    commands += Command.command("gen-ensime-meta", "Generate a project/.ensime for the meta-project.", "")(genEnsimeMeta),
+    commands += Command.command("gen-ensime-project", "Generate a project/.ensime for the project definition.", "")(genEnsimeProject),
     commands += Command.command("debugging", "Add debugging flags to all forked JVM processes.", "")(toggleDebugging(true)),
     commands += Command.command("debugging-off", "Remove debugging flags from all forked JVM processes.", "")(toggleDebugging(false)),
     EnsimeKeys.debuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
     EnsimeKeys.debuggingPort := 5005,
     EnsimeKeys.compilerArgs := (scalacOptions in Compile).value,
     EnsimeKeys.additionalCompilerArgs := defaultCompilerFlags(scalaVersion.value),
-    EnsimeKeys.compilerMetaArgs := Seq(), // https://github.com/ensime/ensime-sbt/issues/98
-    EnsimeKeys.additionalMetaCompilerArgs := defaultCompilerFlags(Properties.versionNumberString),
+    EnsimeKeys.compilerProjectArgs := Seq(), // https://github.com/ensime/ensime-sbt/issues/98
+    EnsimeKeys.additionalProjectCompilerArgs := defaultCompilerFlags(Properties.versionNumberString),
     EnsimeKeys.scalariform := FormattingPreferences(),
     EnsimeKeys.disableSourceMonitoring := false,
     EnsimeKeys.disableClassMonitoring := false,
@@ -406,7 +406,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     )
   }
 
-  def genEnsimeMeta: State => State = { implicit state: State =>
+  def genEnsimeProject: State => State = { implicit state: State =>
     val extracted = Project.extract(state)
 
     implicit val pr = extracted.currentRef
@@ -442,12 +442,12 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     val out = root / ".ensime"
     val cacheDir = root / ".ensime_cache"
     val name = EnsimeKeys.name.gimmeOpt.getOrElse {
-      file(Properties.userDir).getName + "-meta"
+      file(Properties.userDir).getName + "-project"
     }
 
     val compilerArgs = {
-      EnsimeKeys.compilerMetaArgs.run.toList ++
-        EnsimeKeys.additionalMetaCompilerArgs.run
+      EnsimeKeys.compilerProjectArgs.run.toList ++
+        EnsimeKeys.additionalProjectCompilerArgs.run
     }.distinct
     val scalaV = Properties.versionNumberString
     val javaSrc = JdkDir / "src.zip" match {

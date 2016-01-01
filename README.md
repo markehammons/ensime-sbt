@@ -12,7 +12,7 @@ addSbtPlugin("org.ensime" % "ensime-sbt" % "0.2.3")
 
 **Check that again**, if you incorrectly used `~/.sbt/0.13/plugins.sbt` you'll get an sbt resolution error, it really has to be in the `plugins` folder.
 
-Alternatively, copy the `EnsimePlugin.scala` into your `project` directory and make sure you have `scalariform-sbt` and `scalariform` on your meta project's classpath. This approach works well in environments that do not have access to maven central.
+Alternatively, copy the `EnsimePlugin.scala` into your `project` directory and make sure you have `scalariform-sbt` and `scalariform` on your project definition's classpath. This approach works well in environments that do not have access to maven central.
 
 You are also recommended to add the following to your `~/.sbt/0.13/global.sbt` (see debugging section below):
 
@@ -38,7 +38,7 @@ sbt.version=0.13.9
 ## Commands
 
 * `gen-ensime` --- Generate a `.ensime` for the project.
-* `gen-ensime-meta` --- Generate a `project/.ensime` for the meta-project.
+* `gen-ensime-project` --- Generate a `project/.ensime` for the project definition.
 * `debugging` --- Add debugging flags to all forked JVM processes.
 * `debugging-off` --- Remove debugging flags from all forked JVM processes.
 
