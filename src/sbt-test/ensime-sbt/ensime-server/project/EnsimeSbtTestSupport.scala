@@ -49,6 +49,8 @@ object EnsimeSbtTestSupport extends AutoPlugin with CommandSupport {
             replace("/usr/lib/jvm/java-6-oracle", "JDK_HOME").
             replace(jdkHome, "JDK_HOME").
             replaceAll(raw""""-Dplugin\.version=[.\d]++(-SNAPSHOT)?"""", "").
+            replaceAll(raw"""/[.\d]++(-SNAPSHOT)?/jars/ensime-sbt.jar"""", """/HEAD/jars/ensime-sbt.jar"""").
+            replaceAll(raw"""/[.\d]++(-SNAPSHOT)?/srcs/ensime-sbt-sources.jar"""", """/HEAD/srcs/ensime-sbt-sources.jar"""").
             replace(s""" "-Dsbt.global.base=BASE_DIR/global" """, "")
       }
     }.toList
