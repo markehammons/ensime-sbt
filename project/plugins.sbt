@@ -1,4 +1,4 @@
-addSbtPlugin("org.ensime" % "ensime-sbt" % "0.2.3")
+addSbtPlugin("org.ensime" % "ensime-sbt" % "0.3.0")
 
 addSbtPlugin("org.scalariform" % "sbt-scalariform" % "1.5.1")
 
