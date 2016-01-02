@@ -122,6 +122,11 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
   val EnsimeInternal = config("ensime-internal").hide
 
+  val scalaVersionAtStartup = SettingKey[String]("sbt resets (scalaVersion in Global) if the root project changes")
+
+  // NOTE: when we implement https://github.com/ensime/ensime-server/issues/1152
+  //       many of these buildSettings will become projectSettings
+  //       (and we will drop the "in ThisBuild" when obtaining the values)
   override lazy val buildSettings = Seq(
     commands += Command.args("gen-ensime", "Generate a .ensime for the project.")(genEnsime),
     commands += Command.command("gen-ensime-project", "Generate a project/.ensime for the project definition.", "")(genEnsimeProject),
@@ -130,18 +135,13 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     EnsimeKeys.debuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
     EnsimeKeys.debuggingPort := 5005,
     EnsimeKeys.compilerArgs := (scalacOptions in Compile).value,
-    EnsimeKeys.additionalCompilerArgs := defaultCompilerFlags(scalaVersion.value),
+    EnsimeKeys.additionalCompilerArgs := defaultCompilerFlags((scalaVersion in ThisBuild).value),
     EnsimeKeys.compilerProjectArgs := Seq(), // https://github.com/ensime/ensime-sbt/issues/98
     EnsimeKeys.additionalProjectCompilerArgs := defaultCompilerFlags(Properties.versionNumberString),
     EnsimeKeys.scalariform := FormattingPreferences(),
     EnsimeKeys.disableSourceMonitoring := false,
     EnsimeKeys.disableClassMonitoring := false,
-    EnsimeKeys.scalaCompilerJarModuleIDs := Seq(
-      "org.scala-lang" % "scala-compiler" % scalaVersion.value,
-      "org.scala-lang" % "scala-library" % scalaVersion.value,
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-      "org.scala-lang" % "scalap" % scalaVersion.value
-    ).map(_ % EnsimeInternal.name intransitive ()),
+    scalaVersionAtStartup := (scalaVersion in Global).value,
     EnsimeKeys.megaUpdate <<= Keys.state.flatMap { implicit s =>
       val projs = Project.structure(s).allProjectRefs
       log.info("ENSIME update. Please vote for https://github.com/sbt/sbt/issues/2266")
@@ -163,6 +163,13 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     EnsimeKeys.includeSourceJars := true,
     EnsimeKeys.includeDocJars := true,
     ivyConfigurations += EnsimeInternal,
+    // BE NICE https://github.com/ensime/ensime-sbt/issues/138
+    EnsimeKeys.scalaCompilerJarModuleIDs := Seq(
+      "org.scala-lang" % "scala-compiler" % scalaVersion.value,
+      "org.scala-lang" % "scala-library" % scalaVersion.value,
+      "org.scala-lang" % "scala-reflect" % scalaVersion.value,
+      "org.scala-lang" % "scalap" % scalaVersion.value
+    ).map(_ % EnsimeInternal.name intransitive ()),
     libraryDependencies ++= EnsimeKeys.scalaCompilerJarModuleIDs.value
   )
 
@@ -264,16 +271,16 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     val root = file(Properties.userDir)
     val out = file(".ensime")
     val cacheDir = file(".ensime_cache")
-    val name = EnsimeKeys.name.gimmeOpt.getOrElse {
+    val name = (EnsimeKeys.name in ThisBuild).gimmeOpt.getOrElse {
       if (modules.size == 1) modules.head._2.name
       else root.getAbsoluteFile.getName
     }
     val compilerArgs = {
-      EnsimeKeys.compilerArgs.run.toList ++
-        EnsimeKeys.additionalCompilerArgs.run
+      (EnsimeKeys.compilerArgs in ThisBuild).run.toList ++
+        (EnsimeKeys.additionalCompilerArgs in ThisBuild).run
     }.distinct
-    val scalaV = scalaVersion.gimme
-    val javaH = javaHome.gimme.getOrElse(JdkDir)
+    val scalaV = (scalaVersion in ThisBuild).gimme
+    val javaH = (javaHome in ThisBuild).gimme.getOrElse(JdkDir)
     val javaSrc = {
       file(javaH.getAbsolutePath + "/src.zip") match {
         case f if f.exists => List(f)
@@ -284,8 +291,8 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     } ++ EnsimeKeys.unmanagedSourceArchives.gimme
 
     val formatting = EnsimeKeys.scalariform.gimmeOpt
-    val disableSourceMonitoring = EnsimeKeys.disableSourceMonitoring.gimme
-    val disableClassMonitoring = EnsimeKeys.disableClassMonitoring.gimme
+    val disableSourceMonitoring = (EnsimeKeys.disableSourceMonitoring in ThisBuild).gimme
+    val disableClassMonitoring = (EnsimeKeys.disableClassMonitoring in ThisBuild).gimme
 
     val config = EnsimeConfig(
       root, cacheDir,
@@ -301,10 +308,16 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     if (ignoringSourceDirs.nonEmpty) {
       log.warn(
         s"""Some source directories do not exist and will be ignored by ENSIME.
-           |If this is not what you want, create empty directories and re-run this command.
-           |For example (only showing 5): ${ignoringSourceDirs.take(5).mkString(",")} """.stripMargin
+           |For example: ${ignoringSourceDirs.take(5).mkString(",")} """.stripMargin
       )
     }
+
+    if (scalaVersionAtStartup.gimme != (scalaVersion.gimme)) log.error(
+      """You have a different version of scala for your build and root project.
+        |It is highly likely that this is a mistake with your configuration.
+        |Please read https://github.com/ensime/ensime-sbt/issues/138
+        |ENSIME will attempt to Do The Right Thing.""".stripMargin
+    )
 
     state
   }
@@ -312,8 +325,15 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
   // sbt reports a lot of source directories that the user never
   // intends to use we want to create a report
   var ignoringSourceDirs = Set.empty[File]
-  def filteredSources(sources: Set[File]): Set[File] = synchronized {
-    ignoringSourceDirs ++= sources.filterNot(_.exists())
+  def filteredSources(sources: Set[File], scalaBinaryVersion: String): Set[File] = synchronized {
+    ignoringSourceDirs ++= sources.filterNot { dir =>
+      // ignoring to ignore a bunch of things that most people don't care about
+      val n = dir.getName
+      dir.exists() ||
+        n.endsWith("-" + scalaBinaryVersion) ||
+        n.endsWith("java") ||
+        dir.getPath.contains("src_managed")
+    }
     sources.filter(_.exists())
   }
 
@@ -385,8 +405,9 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     } else {
       (EnsimeKeys.unmanagedJavadocArchives in projectRef).gimme
     }
-    val mainSources = filteredSources(sourcesFor(Compile) ++ sourcesFor(Provided) ++ sourcesFor(Optional))
-    val testSources = filteredSources(testPhases.flatMap(sourcesFor))
+    val sbv = scalaBinaryVersion.gimme
+    val mainSources = filteredSources(sourcesFor(Compile) ++ sourcesFor(Provided) ++ sourcesFor(Optional), sbv)
+    val testSources = filteredSources(testPhases.flatMap(sourcesFor), sbv)
     val mainTarget = targetFor(Compile)
     val testTargets = testPhases.flatMap(targetForOpt).toSet
     val deps = project.dependencies.map(_.project.project).toSet
@@ -464,8 +485,10 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
     val scalaCompilerJars = jars.filter { file =>
       val f = file.getName
-      f.contains("scala-library") | f.contains("scala-compiler") |
-        f.contains("scala-reflect") | f.contains("scalap")
+      f.startsWith("scala-library") ||
+        f.startsWith("scala-compiler") ||
+        f.startsWith("scala-reflect") ||
+        f.startsWith("scalap")
     }.toSet
 
     val config = EnsimeConfig(
