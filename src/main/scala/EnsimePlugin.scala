@@ -122,11 +122,6 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
   val EnsimeInternal = config("ensime-internal").hide
 
-  val scalaVersionAtStartup = SettingKey[String]("sbt resets (scalaVersion in Global) if the root project changes")
-
-  // NOTE: when we implement https://github.com/ensime/ensime-server/issues/1152
-  //       many of these buildSettings will become projectSettings
-  //       (and we will drop the "in ThisBuild" when obtaining the values)
   override lazy val buildSettings = Seq(
     commands += Command.args("gen-ensime", "Generate a .ensime for the project.")(genEnsime),
     commands += Command.command("gen-ensime-project", "Generate a project/.ensime for the project definition.", "")(genEnsimeProject),
@@ -134,14 +129,11 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     commands += Command.command("debugging-off", "Remove debugging flags from all forked JVM processes.", "")(toggleDebugging(false)),
     EnsimeKeys.debuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
     EnsimeKeys.debuggingPort := 5005,
-    EnsimeKeys.compilerArgs := (scalacOptions in Compile).value,
-    EnsimeKeys.additionalCompilerArgs := defaultCompilerFlags((scalaVersion in ThisBuild).value),
     EnsimeKeys.compilerProjectArgs := Seq(), // https://github.com/ensime/ensime-sbt/issues/98
     EnsimeKeys.additionalProjectCompilerArgs := defaultCompilerFlags(Properties.versionNumberString),
     EnsimeKeys.scalariform := FormattingPreferences(),
     EnsimeKeys.disableSourceMonitoring := false,
     EnsimeKeys.disableClassMonitoring := false,
-    scalaVersionAtStartup := (scalaVersion in Global).value,
     EnsimeKeys.megaUpdate <<= Keys.state.flatMap { implicit s =>
       val projs = Project.structure(s).allProjectRefs
       log.info("ENSIME update. Please vote for https://github.com/sbt/sbt/issues/2266")
@@ -162,8 +154,17 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     EnsimeKeys.unmanagedJavadocArchives := Nil,
     EnsimeKeys.includeSourceJars := true,
     EnsimeKeys.includeDocJars := true,
+
+    // Even though these are Global in ENSIME (until
+    // https://github.com/ensime/ensime-server/issues/1152) if these
+    // are in buildSettings, then build.sbt projects don't see the
+    // right scalaVersion unless they used `in ThisBuild`, which is
+    // too much to ask of .sbt users.
+    EnsimeKeys.additionalCompilerArgs := defaultCompilerFlags((scalaVersion).value),
+    EnsimeKeys.compilerArgs := (scalacOptions in Compile).value,
+
     ivyConfigurations += EnsimeInternal,
-    // BE NICE https://github.com/ensime/ensime-sbt/issues/138
+    // must be here where the ivy config is defined
     EnsimeKeys.scalaCompilerJarModuleIDs := Seq(
       "org.scala-lang" % "scala-compiler" % scalaVersion.value,
       "org.scala-lang" % "scala-library" % scalaVersion.value,
@@ -222,6 +223,9 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     implicit val pr = extracted.currentRef
     implicit val bs = extracted.structure
 
+    // no way to detect this value later on unless we capture it
+    val scalaV = (scalaVersion).gimme
+
     def transitiveProjects(ref: ProjectRef): Set[ProjectRef] = {
       val proj = Project.getProjectForReference(ref, bs).get
       Set(ref) ++ proj.dependencies.flatMap { dep =>
@@ -252,7 +256,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     implicit val rawModules = projects.collect {
       case (ref, proj) =>
         val (updateReport, updateClassifiersReport) = updateReports(ref)
-        val module = projectData(proj, updateReport, updateClassifiersReport)(ref, bs, state)
+        val module = projectData(scalaV, proj, updateReport, updateClassifiersReport)(ref, bs, state)
         (module.name, module)
     }.toMap
 
@@ -271,16 +275,15 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     val root = file(Properties.userDir)
     val out = file(".ensime")
     val cacheDir = file(".ensime_cache")
-    val name = (EnsimeKeys.name in ThisBuild).gimmeOpt.getOrElse {
+    val name = (EnsimeKeys.name).gimmeOpt.getOrElse {
       if (modules.size == 1) modules.head._2.name
       else root.getAbsoluteFile.getName
     }
     val compilerArgs = {
-      (EnsimeKeys.compilerArgs in ThisBuild).run.toList ++
-        (EnsimeKeys.additionalCompilerArgs in ThisBuild).run
+      (EnsimeKeys.compilerArgs).run.toList ++
+        (EnsimeKeys.additionalCompilerArgs).run
     }.distinct
-    val scalaV = (scalaVersion in ThisBuild).gimme
-    val javaH = (javaHome in ThisBuild).gimme.getOrElse(JdkDir)
+    val javaH = (javaHome).gimme.getOrElse(JdkDir)
     val javaSrc = {
       file(javaH.getAbsolutePath + "/src.zip") match {
         case f if f.exists => List(f)
@@ -291,8 +294,8 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     } ++ EnsimeKeys.unmanagedSourceArchives.gimme
 
     val formatting = EnsimeKeys.scalariform.gimmeOpt
-    val disableSourceMonitoring = (EnsimeKeys.disableSourceMonitoring in ThisBuild).gimme
-    val disableClassMonitoring = (EnsimeKeys.disableClassMonitoring in ThisBuild).gimme
+    val disableSourceMonitoring = (EnsimeKeys.disableSourceMonitoring).gimme
+    val disableClassMonitoring = (EnsimeKeys.disableClassMonitoring).gimme
 
     val config = EnsimeConfig(
       root, cacheDir,
@@ -311,13 +314,6 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
            |For example: ${ignoringSourceDirs.take(5).mkString(",")} """.stripMargin
       )
     }
-
-    if (scalaVersionAtStartup.gimme != (scalaVersion.gimme)) log.error(
-      """You have a different version of scala for your build and root project.
-        |It is highly likely that this is a mistake with your configuration.
-        |Please read https://github.com/ensime/ensime-sbt/issues/138
-        |ENSIME will attempt to Do The Right Thing.""".stripMargin
-    )
 
     state
   }
@@ -338,6 +334,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
   }
 
   def projectData(
+    scalaV: String,
     project: ResolvedProject,
     updateReport: UpdateReport,
     updateClassifiersReport: UpdateReport
@@ -420,6 +417,19 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     } -- mainJars
     val jarSrcs = testPhases.flatMap(jarSrcsFor)
     val jarDocs = testPhases.flatMap(jarDocsFor) ++ myDoc
+
+    if (scalaV != scalaVersion.gimme) {
+      if (System.getProperty("ensime.sbt.debug") != null) {
+        // for testing
+        IO.touch(file("scalaVersionAtStartupWarning"))
+      }
+
+      log.error(
+        s"""You have a different version of scala for your build (${scalaV}) and ${project.id} (${scalaVersion.gimme}).
+           |It is highly likely that this is a mistake with your configuration.
+           |Please read https://github.com/ensime/ensime-sbt/issues/138""".stripMargin
+      )
+    }
 
     EnsimeModule(
       project.id, mainSources, testSources, Set(mainTarget), testTargets, deps,
@@ -626,7 +636,7 @@ object SExpFormatter {
 
   def ssToSExp(ss: Iterable[String]): String =
     if (ss.isEmpty) "nil"
-    else ss.toSeq.sorted.map(toSExp).mkString("(", " ", ")")
+    else ss.toSeq.map(toSExp).mkString("(", " ", ")")
 
   def msToSExp(ss: Iterable[EnsimeModule]): String =
     if (ss.isEmpty) "nil"
@@ -674,7 +684,7 @@ object SExpFormatter {
    :source-roots ${fsToSExp((m.mainRoots ++ m.testRoots))}
    :targets ${fsToSExp(m.targets)}
    :test-targets ${fsToSExp(m.testTargets)}
-   :depends-on-modules ${ssToSExp(m.dependsOnNames)}
+   :depends-on-modules ${ssToSExp(m.dependsOnNames.toList.sorted)}
    :compile-deps ${fsToSExp(m.compileJars)}
    :runtime-deps ${fsToSExp(m.runtimeJars)}
    :test-deps ${fsToSExp(m.testJars)}

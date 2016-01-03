@@ -1,11 +1,11 @@
 > gen-ensime
-> ensimeExpect gen-ensime.expect .ensime
+> ensimeExpect .ensime gen-ensime.expect
 > gen-ensime util
-> ensimeExpect util.gen-ensime.expect .ensime
+> ensimeExpect .ensime util.gen-ensime.expect
 > gen-ensime swank jerk
-> ensimeExpect swank-jerk.gen-ensime.expect .ensime
+> ensimeExpect .ensime swank-jerk.gen-ensime.expect
 > gen-ensime-project
-> ensimeExpect gen-ensime-project.expect project/.ensime
+> ensimeExpect project/.ensime gen-ensime-project.expect
 > core/checkJavaOptions -Xss2m -XX:MaxPermSize=256m -Xmx2g
 > debugging
 > core/checkJavaOptions -Xss2m -XX:MaxPermSize=256m -Xmx2g -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005

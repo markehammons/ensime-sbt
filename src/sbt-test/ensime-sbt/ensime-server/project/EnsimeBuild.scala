@@ -65,10 +65,8 @@ object EnsimeBuild extends Build with JdkResolver {
 
   lazy val commonSettings = scalariformSettings ++ basicSettings ++ Seq(
     //resolvers += Resolver.sonatypeRepo("snapshots"),
-    // sbt sometimes has jcenter https://github.com/sbt/sbt/issues/2253
-    // but we only want to hit maven central and the official NetBeans repos
-    fullResolvers -= Resolver.jcenterRepo,
-    resolvers += "NetBeans" at "http://bits.netbeans.org/nexus/content/groups/netbeans",
+    fullResolvers += Resolver.jcenterRepo,
+    //resolvers += "NetBeans" at "http://bits.netbeans.org/nexus/content/groups/netbeans",
     scalacOptions in Compile ++= Seq(
       // uncomment to debug implicit resolution compilation problems
       //"-Xlog-implicits",
