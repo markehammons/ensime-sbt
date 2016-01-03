@@ -53,12 +53,14 @@ object EnsimeSbtTestSupport extends AutoPlugin with CommandSupport {
             replace(sys.env("JDK_LANGTOOLS_SRC"), "JDK_LANGTOOLS_SRC").
             replace("/usr/lib/jvm/java-6-oracle", "JDK_HOME").
             replace(jdkHome, "JDK_HOME").
-            replaceAll(raw""""-Dplugin\.version=[.\d]++(-SNAPSHOT)?"""", "").
+            replaceAll(raw""""-Dplugin[.]version=[.\d]++(-SNAPSHOT)?"""", "").
+            replaceAll(""""-Xfatal-warnings"""", ""). // ensime-server only has these in CI
             replaceAll(raw"""/[.\d]++(-SNAPSHOT)?/jars/ensime-sbt.jar"""", """/HEAD/jars/ensime-sbt.jar"""").
             replaceAll(raw"""/[.\d]++(-SNAPSHOT)?/srcs/ensime-sbt-sources.jar"""", """/HEAD/srcs/ensime-sbt-sources.jar"""").
-            replaceAll(raw""""IVY_DIR/cache/org.netbeans[^"]*\.jar"""", ""). // https://github.com/ensime/ensime-emacs/issues/327
-            replace(s""" "-Dsbt.global.base=BASE_DIR/global" """, "").
-            replaceAll(raw"\s++", " ")
+            replaceAll(raw""""IVY_DIR/cache/org.netbeans[^"]*[.]jar"""", ""). // https://github.com/ensime/ensime-emacs/issues/327
+            replaceAll(raw""""-Dsbt[.]global[.]base=BASE_DIR/global"""", "").
+            replaceAll(raw"\s++", " ").
+            replace("( ", "(").replace(" )", ")")
       }
     }.toList
 

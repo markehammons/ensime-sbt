@@ -7,7 +7,7 @@
  :java-flags ("-XX:MaxPermSize=256m" "-Xmx2g" "-Xss2m")
  :reference-source-roots ("JDK_LANGTOOLS_SRC" "JDK_HOME/src.zip")
  :scala-version "2.11.7"
- :compiler-args ("-Xfuture" "-Xlint" "-Yinline-warnings" "-Yno-adapted-args" "-Ywarn-dead-code" "-Ywarn-numeric-widen" "-Ywarn-unused-import" "-deprecation" "-encoding" "-feature" "-language:implicitConversions" "-language:postfixOps" "-target:jvm-1.6" "UTF-8")
+ :compiler-args ("-encoding" "UTF-8" "-target:jvm-1.6" "-feature" "-deprecation" "-language:postfixOps" "-language:implicitConversions" "-Xlint" "-Yinline-warnings" "-Yno-adapted-args" "-Ywarn-dead-code" "-Xfuture" "-Ywarn-unused-import" "-Ywarn-numeric-widen")
  :formatting-prefs nil
  :disable-source-monitoring nil
  :disable-class-monitoring nil

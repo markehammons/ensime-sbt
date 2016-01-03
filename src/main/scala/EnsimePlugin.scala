@@ -636,7 +636,7 @@ object SExpFormatter {
 
   def ssToSExp(ss: Iterable[String]): String =
     if (ss.isEmpty) "nil"
-    else ss.toSeq.sorted.map(toSExp).mkString("(", " ", ")")
+    else ss.toSeq.map(toSExp).mkString("(", " ", ")")
 
   def msToSExp(ss: Iterable[EnsimeModule]): String =
     if (ss.isEmpty) "nil"
@@ -684,7 +684,7 @@ object SExpFormatter {
    :source-roots ${fsToSExp((m.mainRoots ++ m.testRoots))}
    :targets ${fsToSExp(m.targets)}
    :test-targets ${fsToSExp(m.testTargets)}
-   :depends-on-modules ${ssToSExp(m.dependsOnNames)}
+   :depends-on-modules ${ssToSExp(m.dependsOnNames.toList.sorted)}
    :compile-deps ${fsToSExp(m.compileJars)}
    :runtime-deps ${fsToSExp(m.runtimeJars)}
    :test-deps ${fsToSExp(m.testJars)}
