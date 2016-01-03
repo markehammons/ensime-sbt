@@ -7,7 +7,7 @@ This [sbt](http://github.com/sbt/sbt) plugin generates a `.ensime` file and prov
 Add these lines to `~/.sbt/0.13/plugins/plugins.sbt` as opposed to `project/plugins.sbt` (the decision to use ENSIME is per-user, rather than per-project):
 
 ```scala
-addSbtPlugin("org.ensime" % "ensime-sbt" % "0.3.1")
+addSbtPlugin("org.ensime" % "ensime-sbt" % "0.3.2")
 ```
 
 **Check that again**, if you incorrectly used `~/.sbt/0.13/plugins.sbt` you'll get an sbt resolution error, it really has to be in the `plugins` folder.
@@ -69,7 +69,7 @@ You can follow snapshot releases by using the following instead of the stable re
 resolvers += Resolver.sonatypeRepo("snapshots")
 
 // update to the latest development version, see project/EnsimeSbtBuild.scala
-addSbtPlugin("org.ensime" % "ensime-sbt" % "0.3.2-SNAPSHOT")
+addSbtPlugin("org.ensime" % "ensime-sbt" % "0.3.3-SNAPSHOT")
 ```
 
 
