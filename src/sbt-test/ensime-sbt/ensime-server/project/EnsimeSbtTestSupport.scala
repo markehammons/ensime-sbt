@@ -10,6 +10,11 @@ import org.ensime.CommandSupport
 
 object EnsimeSbtTestSupport extends AutoPlugin with CommandSupport {
 
+  {
+    // horrible hack to enable side effects in EnsimePlugin
+    System.setProperty("ensime.sbt.debug", "true")
+  }
+
   override def trigger = allRequirements
 
   private lazy val parser = complete.Parsers.spaceDelimited("<arg>")

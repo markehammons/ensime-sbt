@@ -312,12 +312,19 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
       )
     }
 
-    if (scalaVersionAtStartup.gimme != (scalaVersion.gimme)) log.error(
-      """You have a different version of scala for your build and root project.
+    if (scalaVersionAtStartup.gimme != (scalaVersion.gimme)) {
+      if (System.getProperty("ensime.sbt.debug") != null) {
+        // for testing
+        IO.touch(file("scalaVersionAtStartupWarning"))
+      }
+
+      log.error(
+        """You have a different version of scala for your build and root project.
         |It is highly likely that this is a mistake with your configuration.
         |Please read https://github.com/ensime/ensime-sbt/issues/138
         |ENSIME will attempt to Do The Right Thing.""".stripMargin
-    )
+      )
+    }
 
     state
   }
