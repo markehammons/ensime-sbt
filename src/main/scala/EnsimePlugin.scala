@@ -122,8 +122,6 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
 
   val EnsimeInternal = config("ensime-internal").hide
 
-  // NOTE: when we implement https://github.com/ensime/ensime-server/issues/1152
-  //       many of these will become projectSettings
   override lazy val buildSettings = Seq(
     commands += Command.args("gen-ensime", "Generate a .ensime for the project.")(genEnsime),
     commands += Command.command("gen-ensime-project", "Generate a project/.ensime for the project definition.", "")(genEnsimeProject),
@@ -131,8 +129,6 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     commands += Command.command("debugging-off", "Remove debugging flags from all forked JVM processes.", "")(toggleDebugging(false)),
     EnsimeKeys.debuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
     EnsimeKeys.debuggingPort := 5005,
-    EnsimeKeys.additionalCompilerArgs := defaultCompilerFlags((scalaVersion).value),
-    EnsimeKeys.compilerArgs := (scalacOptions in Compile).value,
     EnsimeKeys.compilerProjectArgs := Seq(), // https://github.com/ensime/ensime-sbt/issues/98
     EnsimeKeys.additionalProjectCompilerArgs := defaultCompilerFlags(Properties.versionNumberString),
     EnsimeKeys.scalariform := FormattingPreferences(),
@@ -158,6 +154,15 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     EnsimeKeys.unmanagedJavadocArchives := Nil,
     EnsimeKeys.includeSourceJars := true,
     EnsimeKeys.includeDocJars := true,
+
+    // Even though these are Global in ENSIME (until
+    // https://github.com/ensime/ensime-server/issues/1152) if these
+    // are in buildSettings, then build.sbt projects don't see the
+    // right scalaVersion unless they used `in ThisBuild`, which is
+    // too much to ask of .sbt users.
+    EnsimeKeys.additionalCompilerArgs := defaultCompilerFlags((scalaVersion).value),
+    EnsimeKeys.compilerArgs := (scalacOptions in Compile).value,
+
     ivyConfigurations += EnsimeInternal,
     // must be here where the ivy config is defined
     EnsimeKeys.scalaCompilerJarModuleIDs := Seq(
@@ -420,8 +425,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
       }
 
       log.error(
-        s"""You have a different version of scala for your build (${scalaV})
-           |and ${project.id} (${scalaVersion.gimme}).
+        s"""You have a different version of scala for your build (${scalaV}) and ${project.id} (${scalaVersion.gimme}).
            |It is highly likely that this is a mistake with your configuration.
            |Please read https://github.com/ensime/ensime-sbt/issues/138""".stripMargin
       )
