@@ -37,7 +37,7 @@ object EnsimeSbtTestSupport extends AutoPlugin with CommandSupport {
 
     val jdkHome = javaHome.gimme.getOrElse(file(Properties.jdkHome)).getAbsolutePath
 
-    val List(orig, expect) = args.map { filename =>
+    val List(got, expect) = args.map { filename =>
       log.info(s"parsing ${file(filename).getCanonicalPath}")
       // not windows friendly
       IO.readLines(file(filename)).map {
@@ -51,14 +51,16 @@ object EnsimeSbtTestSupport extends AutoPlugin with CommandSupport {
             replaceAll(raw""""-Dplugin\.version=[.\d]++(-SNAPSHOT)?"""", "").
             replaceAll(raw"""/[.\d]++(-SNAPSHOT)?/jars/ensime-sbt.jar"""", """/HEAD/jars/ensime-sbt.jar"""").
             replaceAll(raw"""/[.\d]++(-SNAPSHOT)?/srcs/ensime-sbt-sources.jar"""", """/HEAD/srcs/ensime-sbt-sources.jar"""").
-            replace(s""" "-Dsbt.global.base=BASE_DIR/global" """, "")
+            replaceAll(raw""""IVY_DIR/cache/org.netbeans[^"]*\.jar"""", ""). // https://github.com/ensime/ensime-emacs/issues/327
+            replace(s""" "-Dsbt.global.base=BASE_DIR/global" """, "").
+            replaceAll(raw"\s++", " ")
       }
     }.toList
 
-    val deltas = DiffUtils.diff(orig.asJava, expect.asJava).getDeltas.asScala
+    val deltas = DiffUtils.diff(expect.asJava, got.asJava).getDeltas.asScala
     if (!deltas.isEmpty) {
       // for local debugging
-      IO.write(file(Properties.userHome + "/ensime-got"), expect.mkString("\n"))
+      IO.write(file(Properties.userHome + "/ensime-got"), got.mkString("\n"))
       throw new MessageOnlyException(s".ensime diff: ${deltas.mkString("\n")}")
     }
 
