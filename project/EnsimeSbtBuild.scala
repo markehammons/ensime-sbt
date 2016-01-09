@@ -9,7 +9,6 @@ import sbt.Keys._
 import sbt.ScriptedPlugin._
 import scalariform.formatter.preferences._
 import util.Properties
-import org.ensime.Imports.EnsimeKeys
 
 object EnsimeSbtBuild extends Build {
 
@@ -42,7 +41,6 @@ object EnsimeSbtBuild extends Build {
       // scalap needed for :scala-compiler-jars
       libraryDependencies += "org.scala-lang" % "scalap" % scalaVersion.value,
       ScalariformKeys.preferences := FormattingPreferences().setPreference(AlignSingleLineCaseStatements, true),
-      EnsimeKeys.scalariform := ScalariformKeys.preferences.value,
       scriptedLaunchOpts := Seq(
         "-Dplugin.version=" + version.value,
         // .jvmopts is ignored, simulate here
