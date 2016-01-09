@@ -2,6 +2,7 @@
 
 This [sbt](http://github.com/sbt/sbt) plugin generates a `.ensime` file and provides various convenience commands for interacting with [ENSIME](http://github.com/ensime/ensime-server).
 
+
 ## Install
 
 Add these lines to `~/.sbt/0.13/plugins/plugins.sbt` as opposed to `project/plugins.sbt` (the decision to use ENSIME is per-user, rather than per-project):
@@ -14,6 +15,7 @@ addSbtPlugin("org.ensime" % "ensime-sbt" % "0.3.2")
 
 Alternatively, copy the `EnsimePlugin.scala` into your `project` directory and make sure you have `scalariform` and `scalap` on your project definition's classpath. This approach works well in environments that do not have access to maven central.
 
+
 ## Commands
 
 * `gen-ensime` --- Generate a `.ensime` for the project (takes space-separated parameters to restrict to subprojects).
@@ -24,6 +26,7 @@ Alternatively, copy the `EnsimePlugin.scala` into your `project` directory and m
 Note that downloading and resolving the sources and javadocs can take some time on first use.
 
 (Copied from [EnsimePlugin.scala](https://github.com/ensime/ensime-sbt/blob/master/src/main/scala/EnsimePlugin.scala#L59))
+
 
 ### Debugging Example
 
@@ -44,6 +47,7 @@ at which point, the test will hang until you connect a remote debugger to port 5
 
 Note: If you'd like to debug using ensime-emacs, first set your breakpoints, then use ensime-db-attach to connect.
 
+
 ## Customise
 
 Customising [EnsimeKeys](https://github.com/ensime/ensime-sbt/blob/master/src/main/scala/EnsimePlugin.scala#L21) is done via the usual sbt mechanism, e.g. insert the following into `~/.sbt/0.13/ensime.sbt`
@@ -53,6 +57,22 @@ import org.ensime.Imports.EnsimeKeys
 
 EnsimeKeys.debuggingPort := 1337
 ```
+
+For project-specific tailorings, you do not need to commit anything to your project. Simply create a file `project/EnsimeProjectSettings.scala` (which you should add to your personal `.gitignore`) containing the following:
+
+```scala
+import sbt._
+import org.ensime.Imports.EnsimeKeys
+
+object EnsimeProjectSettings extends AutoPlugin {
+  override def requires = org.ensime.EnsimePlugin
+  override def trigger = allRequirements
+  override def projectSettings = Seq(
+    // your settings here
+  )
+}
+```
+
 
 ## Troubleshooting
 
@@ -83,26 +103,6 @@ cancelable in Global := true
 
 Emacs users should recall that in order to send a control sequence to the `sbt-mode` subprocess, first run `sbt-clear` (bound to `C-c C-v` by default) then `C-c`. i.e. to send `C-c` to `sbt`, type `C-c C-v C-c C-c` (you probably want to bind this to something easier).
 
-### Formatting
-
-If you use [sbt-scalariform](https://github.com/sbt/sbt-scalariform), and wish to use the same settings in ENSIME, you must set in your build `settings`:
-
-```scala
-EnsimeKeys.scalariform := ScalariformKeys.preferences.value
-```
-
-e.g. for `Build.scala` style projects
-
-```scala
-import org.ensime.Imports.EnsimeKeys
-
-override val settings = super.settings ++ Seq(
-  ScalariformKeys.preferences := <... your scalariform settings here ...> ,
-  EnsimeKeys.scalariform := ScalariformKeys.preferences.value
-)
-```
-
-This is not automatic in order to workaround https://github.com/daniel-trinh/sbt-scalariform/issues/24
 
 ### SBT Version
 
