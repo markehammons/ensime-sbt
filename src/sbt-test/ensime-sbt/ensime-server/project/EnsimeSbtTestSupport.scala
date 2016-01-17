@@ -49,6 +49,7 @@ object EnsimeSbtTestSupport extends AutoPlugin with CommandSupport {
         line =>
           line.
             replace(baseDir.getCanonicalPath, "BASE_DIR").
+            replace(baseDir.getCanonicalPath.replace("/private", ""), "BASE_DIR"). // workaround for https://github.com/ensime/ensime-sbt/issues/151
             replace(Properties.userHome + "/.ivy2/", "IVY_DIR/").
             replace(sys.env("JDK_LANGTOOLS_SRC"), "JDK_LANGTOOLS_SRC").
             replace("/usr/lib/jvm/java-6-oracle", "JDK_HOME").
