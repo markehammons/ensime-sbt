@@ -40,6 +40,11 @@ object Imports {
       "Scalariform formatting preferences to use in ENSIME."
     )
 
+    val useJar = settingKey[Boolean](
+      "Use the project's jar instead of the classes directory for indexing. " +
+        "Note that `proj/compile` does not produce the jar, change your workflow to use `proj/packageBin`."
+    )
+
     val disableSourceMonitoring = settingKey[Boolean](
       "Workaround temporary performance problems on large projects."
     )
@@ -124,6 +129,8 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     EnsimeKeys.unmanagedJavadocArchives := Nil,
     EnsimeKeys.includeSourceJars := true,
     EnsimeKeys.includeDocJars := true,
+
+    EnsimeKeys.useJar := false,
 
     // Even though these are Global in ENSIME (until
     // https://github.com/ensime/ensime-server/issues/1152) if these
@@ -333,10 +340,12 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     }
 
     def targetFor(config: Configuration) =
-      (classDirectory in config).gimme
+      if (EnsimeKeys.useJar.gimme) (artifactPath in (config, packageBin)).gimme
+      else (classDirectory in config).gimme
 
     def targetForOpt(config: Configuration) =
-      (classDirectory in config).gimmeOpt
+      if (EnsimeKeys.useJar.gimme) (artifactPath in (config, packageBin)).gimmeOpt
+      else (classDirectory in config).gimmeOpt
 
     val myDoc = (artifactPath in (Compile, packageDoc)).gimmeOpt
 
