@@ -20,7 +20,7 @@ object EnsimeSbtBuild extends Build {
 
   override val settings = super.settings ++ Seq(
     organization := "org.ensime",
-    version := "0.3.3-SNAPSHOT",
+    version := "0.3.3",
     scalaVersion := "2.10.6",
     ivyLoggingLevel := UpdateLogging.Quiet,
     scalacOptions in Compile ++= Seq(
