@@ -1,35 +1,5 @@
-/*
- * Copyright (c) 2015, ENSIME Contributors
- *
- * All rights reserved. Redistribution and use in source and binary
- * forms, with or without modification, are permitted provided that
- * the following conditions are met:
- *
- *   - Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *
- *   - Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *
- *   - Neither the name of ENSIME nor the names of its contributors
- *     may be used to endorse or promote products derived from this
- *     software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL AEMON
- * CANNON OR THE ENSIME CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
- * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
- * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
- * OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+// Copyright (C) 2014 - 2016 ENSIME Contributors
+// Licence: Apache-2.0
 package org.ensime
 
 import Imports._
@@ -68,6 +38,11 @@ object Imports {
     )
     val scalariform = settingKey[IFormattingPreferences](
       "Scalariform formatting preferences to use in ENSIME."
+    )
+
+    val useJar = settingKey[Boolean](
+      "Use the project's jar instead of the classes directory for indexing. " +
+        "Note that `proj/compile` does not produce the jar, change your workflow to use `proj/packageBin`."
     )
 
     val disableSourceMonitoring = settingKey[Boolean](
@@ -154,6 +129,8 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     EnsimeKeys.unmanagedJavadocArchives := Nil,
     EnsimeKeys.includeSourceJars := true,
     EnsimeKeys.includeDocJars := true,
+
+    EnsimeKeys.useJar := false,
 
     // Even though these are Global in ENSIME (until
     // https://github.com/ensime/ensime-server/issues/1152) if these
@@ -363,10 +340,12 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     }
 
     def targetFor(config: Configuration) =
-      (classDirectory in config).gimme
+      if (EnsimeKeys.useJar.gimme) (artifactPath in (config, packageBin)).gimme
+      else (classDirectory in config).gimme
 
     def targetForOpt(config: Configuration) =
-      (classDirectory in config).gimmeOpt
+      if (EnsimeKeys.useJar.gimme) (artifactPath in (config, packageBin)).gimmeOpt
+      else (classDirectory in config).gimmeOpt
 
     val myDoc = (artifactPath in (Compile, packageDoc)).gimmeOpt
 
