@@ -30,6 +30,9 @@ object Imports {
     val additionalCompilerArgs = TaskKey[Seq[String]](
       "Additional arguments for the presentation compiler."
     )
+    val javaFlags = TaskKey[Seq[String]](
+      "Flags to be passed to Java compiler."
+    )
     val includeSourceJars = settingKey[Boolean](
       "Should source jars be included in the .ensime file."
     )
@@ -104,6 +107,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     commands += Command.command("debugging-off", "Remove debugging flags from all forked JVM processes.", "")(toggleDebugging(false)),
     EnsimeKeys.debuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
     EnsimeKeys.debuggingPort := 5005,
+    EnsimeKeys.javaFlags := JavaFlags,
     EnsimeKeys.compilerProjectArgs := Seq(), // https://github.com/ensime/ensime-sbt/issues/98
     EnsimeKeys.additionalProjectCompilerArgs := defaultCompilerFlags(Properties.versionNumberString),
     EnsimeKeys.scalariform := FormattingPreferences(),
@@ -269,6 +273,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
           Nil
       }
     } ++ EnsimeKeys.unmanagedSourceArchives.gimme
+    val javaFlags = EnsimeKeys.javaFlags.run.toList
 
     val formatting = EnsimeKeys.scalariform.gimmeOpt
     val disableSourceMonitoring = (EnsimeKeys.disableSourceMonitoring).gimme
@@ -278,7 +283,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
       root, cacheDir,
       scalaCompilerJars,
       name, scalaV, compilerArgs,
-      modules, javaH, JavaFlags, javaSrc, formatting,
+      modules, javaH, javaFlags, javaSrc, formatting,
       disableSourceMonitoring, disableClassMonitoring
     )
 
@@ -464,6 +469,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
       case f if f.exists => List(f)
       case _             => Nil
     }
+    val javaFlags = EnsimeKeys.javaFlags.run.toList
 
     val formatting = EnsimeKeys.scalariform.gimmeOpt
 
@@ -484,7 +490,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
       root, cacheDir,
       scalaCompilerJars,
       name, scalaV, compilerArgs,
-      Map(module.name -> module), JdkDir, JavaFlags, javaSrc, formatting,
+      Map(module.name -> module), JdkDir, javaFlags, javaSrc, formatting,
       false, false
     )
 
