@@ -15,6 +15,10 @@ object Foo extends App {
   val foo = new Foo()
   println("Hello, " + foo.x)
   println(foo.testMethod(7, "seven"))
+
+  val fn: String => Int = str => str.size
+
+  fn("foobar")
 }
 
 // for SearchServiceSpec

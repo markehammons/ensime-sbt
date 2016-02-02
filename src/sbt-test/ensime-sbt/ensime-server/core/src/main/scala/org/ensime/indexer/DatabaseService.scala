@@ -1,10 +1,12 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.indexer
 
 import java.io.File
 import java.sql.Timestamp
 
 import akka.event.slf4j.SLF4JLogging
-import com.jolbox.bonecp.BoneCPDataSource
+import com.zaxxer.hikari.HikariDataSource
 import org.apache.commons.vfs2.FileObject
 import org.ensime.indexer.DatabaseService._
 
@@ -18,17 +20,15 @@ import slick.driver.H2Driver.api._
 class DatabaseService(dir: File) extends SLF4JLogging {
   lazy val (datasource, db) = {
     // MVCC plus connection pooling speeds up the tests ~10%
-    val url = "jdbc:h2:file:" + dir.getAbsolutePath + "/db;MVCC=TRUE"
+    val backend = sys.env.get("ENSIME_EXPERIMENTAL_H2").getOrElse("jdbc:h2:file:")
+    val url = backend + dir.getAbsolutePath + "/db;MVCC=TRUE"
     val driver = "org.h2.Driver"
 
-    // http://jolbox.com/benchmarks.html
-    val ds = new BoneCPDataSource()
-    ds.setDriverClass(driver)
+    // https://github.com/brettwooldridge/HikariCP
+    val ds = new HikariDataSource()
+    ds.setDriverClassName(driver)
     ds.setJdbcUrl(url)
-    ds.setStatementsCacheSize(50)
-    ds.setUsername("")
-    ds.setPassword("")
-    val threads = ds.getMaxConnectionsPerPartition()
+    val threads = ds.getMaximumPoolSize()
     val executor = AsyncExecutor("Slick", numThreads = threads, queueSize = -1)
     (ds, Database.forDataSource(ds, executor = executor))
   }
@@ -111,21 +111,6 @@ class DatabaseService(dir: File) extends SLF4JLogging {
 }
 
 object DatabaseService {
-  // I absolutely **HATE** this DSL bullshit. I want to use the raw
-  // SQL!! But it looks like slick/scala-2.11 don't play well at the
-  // moment: https://issues.scala-lang.org/browse/SI-8261
-  // another advantage of the raw SQL and mappers is that our
-  // case classes don't need to be bastardised to match what the
-  // DSL can understand.
-
-  // case class Checked(file: File, checked: Date)
-  // db withSession { implicit s =>
-  //   sqlu"""CREATE TABLE CHECKED(
-  //            id INTEGER NOT NULL PRIMARY KEY,
-  //            file VARCHAR(255) NOT NULL UNIQUE,
-  //            checked TIMESTAMP)""".execute(s)
-  //}
-
   case class FileCheck(id: Option[Int], filename: String, timestamp: Timestamp) {
     def file(implicit vfs: EnsimeVFS) = vfs.vfile(filename)
     def lastModified = timestamp.getTime

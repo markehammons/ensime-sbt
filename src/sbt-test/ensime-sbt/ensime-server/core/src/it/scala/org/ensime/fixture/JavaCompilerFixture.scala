@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.fixture
 
 import java.io.File
@@ -17,7 +19,7 @@ import scala.concurrent.duration.Duration
 
 trait JavaCompilerFixture {
   def withJavaCompiler(
-    testCode: (TestKitFix, EnsimeConfig, JavaCompiler, JavaStoreReporter) => Any
+    testCode: (TestKitFix, EnsimeConfig, JavaCompiler, JavaStoreReporter, SearchService) => Any
   ): Any
 
   def runForPositionInCompiledSource(config: EnsimeConfig, cc: JavaCompiler, lines: String*)(testCode: (SourceFileInfo, Int, String, JavaCompiler) => Any): Any = {
@@ -42,7 +44,8 @@ trait JavaCompilerFixture {
 object JavaCompilerFixture {
   private[fixture] def create(
     config: EnsimeConfig,
-    reportHandler: ReportHandler
+    reportHandler: ReportHandler,
+    search: SearchService
   )(
     implicit
     system: ActorSystem,
@@ -50,7 +53,7 @@ object JavaCompilerFixture {
   ): JavaCompiler = {
     val indexer = TestProbe()
     val parent = TestProbe()
-    new JavaCompiler(config, reportHandler)
+    new JavaCompiler(config, reportHandler, indexer.ref, search, vfs)
   }
 }
 
@@ -68,19 +71,19 @@ trait IsolatedJavaCompilerFixture
     with IsolatedSearchServiceFixture {
 
   override def withJavaCompiler(
-    testCode: (TestKitFix, EnsimeConfig, JavaCompiler, JavaStoreReporter) => Any
+    testCode: (TestKitFix, EnsimeConfig, JavaCompiler, JavaStoreReporter, SearchService) => Any
   ): Any = {
     withVFS { implicit vfs =>
       withTestKit { testkit =>
         import testkit._
-        withEnsimeConfig { config =>
-          import org.ensime.fixture.JavaCompilerFixture._
-          val reportHandler = new JavaStoreReporter
-          val cc = create(config, reportHandler)
-          testCode(testkit, config, cc, reportHandler)
+        withSearchService { (config, search) =>
+          withEnsimeConfig { config =>
+            val reportHandler = new JavaStoreReporter
+            val cc = JavaCompilerFixture.create(config, reportHandler, search)
+            testCode(testkit, config, cc, reportHandler, search)
+          }
         }
       }
     }
   }
 }
-

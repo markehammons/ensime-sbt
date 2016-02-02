@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.core
 
 import akka.actor._
@@ -142,6 +144,8 @@ class DocResolver(
     })
   }
 
+  private def toAndroidAnchor(anchor: String): String = anchor.replace(",", ", ")
+
   private def resolveWellKnownUri(sig: DocSigPair): Option[String] = {
     if (sig.java.fqn.javaStdLib) {
       val path = javaFqnToPath(sig.java.fqn)
@@ -152,6 +156,12 @@ class DocResolver(
         m => "#" + { if (version == "8") toJava8Anchor(m) else m }
       }.getOrElse("")
       Some(s"http://docs.oracle.com/javase/$version/docs/api/$path$anchor")
+
+    } else if (sig.java.fqn.androidStdLib) {
+      val path = javaFqnToPath(sig.java.fqn)
+      val anchor = sig.java.member.map { m => "#" + toAndroidAnchor(m) }.getOrElse("")
+      Some(s"http://developer.android.com/reference/$path$anchor")
+
     } else None
   }
 

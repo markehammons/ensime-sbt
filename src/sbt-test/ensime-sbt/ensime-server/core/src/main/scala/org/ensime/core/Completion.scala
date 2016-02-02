@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 /*
  * This file contains derivative works that require the following
  * header to be displayed:
@@ -37,6 +39,7 @@
  */
 package org.ensime.core
 
+import akka.actor.ActorRef
 import akka.pattern.Patterns
 import akka.util.Timeout
 import org.ensime.api._
@@ -158,23 +161,6 @@ trait CompletionControl {
     }
   }
 
-  def fetchTypeSearchCompletions(prefix: String, maxResults: Int): Future[Option[List[CompletionInfo]]] = {
-    val req = TypeCompletionsReq(prefix, maxResults)
-    import scala.concurrent.ExecutionContext.Implicits.{ global => exe }
-    val askRes = Patterns.ask(indexer, req, Timeout(1000.milliseconds))
-    askRes.map {
-      case s: SymbolSearchResults =>
-        s.syms.map { s =>
-          CompletionInfo(
-            s.localName, CompletionSignature(List.empty, s.name),
-            -1, isCallable = false, 40, Some(s.name)
-          )
-        }
-      case unknown =>
-        throw new IllegalStateException("Unexpected response type from request:" + unknown)
-    }.map(Some(_)).recover { case _ => None }
-  }
-
   def makeAll(context: CompletionContext, maxResults: Int, caseSens: Boolean): List[CompletionInfo] = {
 
     def toCompletionInfo(
@@ -220,7 +206,7 @@ trait CompletionControl {
     val typeSearch = context match {
       case ScopeContext(_, _, prefix, _) =>
         if (TypeNameRegex.findFirstMatchIn(prefix).isDefined) {
-          Some(fetchTypeSearchCompletions(prefix, maxResults))
+          Some(fetchTypeSearchCompletions(prefix, maxResults, indexer))
         } else None
       case _ => None
     }
@@ -326,7 +312,7 @@ object Keywords {
     "yield"
   )
 
-  val keywordCompletions = keywords map { CompletionInfo(_, CompletionSignature(List(), ""), -1, false, 100, None) }
+  val keywordCompletions = keywords map { CompletionInfo(_, CompletionSignature(List(), "", false), false, 100, None) }
 
 }
 
@@ -341,7 +327,7 @@ trait Completion { self: RichPresentationCompiler =>
         memberSyms.flatMap { s =>
           val name = if (s.hasPackageFlag) { s.nameString } else { typeShortName(s) }
           if (name.startsWith(prefix)) {
-            Some(CompletionInfo(name, CompletionSignature(List.empty, ""), -1, isCallable = false, 50, None))
+            Some(CompletionInfo(name, CompletionSignature(List.empty, "", false), isCallable = false, 50, None))
           } else None
         }.toList.sortBy(ci => (ci.relevance, ci.name))
       case _ => List.empty
@@ -366,6 +352,23 @@ object CompletionUtil {
     ((matchEntire && m == prefix) ||
       (!matchEntire && caseSens && m.startsWith(prefix)) ||
       (!matchEntire && !caseSens && m.toUpperCase.startsWith(prefixUpper)))
+  }
+
+  def fetchTypeSearchCompletions(prefix: String, maxResults: Int, indexer: ActorRef): Future[Option[List[CompletionInfo]]] = {
+    val req = TypeCompletionsReq(prefix, maxResults)
+    import scala.concurrent.ExecutionContext.Implicits.{ global => exe }
+    val askRes = Patterns.ask(indexer, req, Timeout(1000.milliseconds))
+    askRes.map {
+      case s: SymbolSearchResults =>
+        s.syms.map { s =>
+          CompletionInfo(
+            s.localName, CompletionSignature(List.empty, s.name, false),
+            isCallable = false, 40, None
+          )
+        }
+      case unknown =>
+        throw new IllegalStateException("Unexpected response type from request:" + unknown)
+    }.map(Some(_)).recover { case _ => None }
   }
 
 }

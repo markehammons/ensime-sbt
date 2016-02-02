@@ -1,15 +1,19 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.core
 
 import akka.actor._
 import akka.event.LoggingReceive.withLabel
 import org.ensime.api._
 import org.ensime.core.javac._
-import org.ensime.indexer.EnsimeVFS
+import org.ensime.indexer.{ EnsimeVFS, SearchService }
 import org.ensime.util.ReportHandler
 import org.ensime.util.FileUtils
 
 class JavaAnalyzer(
     broadcaster: ActorRef,
+    indexer: ActorRef,
+    search: SearchService,
     implicit val config: EnsimeConfig,
     implicit val vfs: EnsimeVFS
 ) extends Actor with Stash with ActorLogging {
@@ -31,7 +35,10 @@ class JavaAnalyzer(
         override def reportJavaNotes(notes: List[Note]): Unit = {
           broadcaster ! NewJavaNotesEvent(isFull = false, notes)
         }
-      }
+      },
+      indexer,
+      search,
+      vfs
     )
 
     // JavaAnalyzer is always 'ready', but legacy clients expect to see
@@ -65,15 +72,25 @@ class JavaAnalyzer(
     case SymbolDesignationsReq(f, start, end, tpes) =>
       // NOT IMPLEMENTED YET
       sender ! SymbolDesignations(f.file, Nil)
+
+    case SymbolAtPointReq(file, point) =>
+      sender() ! javaCompiler.askSymbolAtPoint(file, point)
+
+    case ImplicitInfoReq(file, range: OffsetRange) =>
+      // Implicit type conversion information is not applicable for Java, so we
+      // return an empty list.
+      sender() ! ImplicitInfos(Nil)
   }
 
 }
 object JavaAnalyzer {
   def apply(
-    broadcaster: ActorRef
+    broadcaster: ActorRef,
+    indexer: ActorRef,
+    search: SearchService
   )(
     implicit
     config: EnsimeConfig,
     vfs: EnsimeVFS
-  ) = Props(new JavaAnalyzer(broadcaster, config, vfs))
+  ) = Props(new JavaAnalyzer(broadcaster, indexer, search, config, vfs))
 }

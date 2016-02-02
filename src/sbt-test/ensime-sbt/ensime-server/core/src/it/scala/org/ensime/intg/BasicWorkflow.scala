@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.intg
 
 import akka.event.slf4j.SLF4JLogging
@@ -25,6 +27,7 @@ class BasicWorkflow extends WordSpec with Matchers
             val sourceRoot = scalaMain(config)
             val fooFile = sourceRoot / "org/example/Foo.scala"
             val fooFilePath = fooFile.getAbsolutePath
+            val barFile = sourceRoot / "org/example/Bar.scala"
 
             // trigger typeCheck
             project ! TypecheckFilesReq(List(Left(fooFile)))
@@ -53,30 +56,11 @@ class BasicWorkflow extends WordSpec with Matchers
             project ! SymbolAtPointReq(Left(fooFile), 128)
             val symbolAtPointOpt: Option[SymbolInfo] = expectMsgType[Option[SymbolInfo]]
 
-            val intTypeId = symbolAtPointOpt match {
-              case Some(SymbolInfo("scala.Int", "Int", Some(_), BasicTypeInfo("Int", typeId, DeclaredAs.Class, "scala.Int", List(), List(), _, None), false, Some(ownerTypeId))) =>
-                typeId
-              case _ =>
-                fail("Symbol at point does not match expectations, expected Int symbol got: " + symbolAtPointOpt)
-            }
-
             project ! TypeByNameReq("org.example.Foo")
             val fooClassByNameOpt = expectMsgType[Option[TypeInfo]]
-            val fooClassId = fooClassByNameOpt match {
-              case Some(BasicTypeInfo("Foo", fooTypeIdVal, DeclaredAs.Class, "org.example.Foo", List(), List(), _, None)) =>
-                fooTypeIdVal
-              case _ =>
-                fail("type by name for Foo class does not match expectations, got: " + fooClassByNameOpt)
-            }
 
             project ! TypeByNameReq("org.example.Foo$")
             val fooObjectByNameOpt = expectMsgType[Option[TypeInfo]]
-            val fooObjectId = fooObjectByNameOpt match {
-              case Some(BasicTypeInfo("Foo$", fooObjectIdVal, DeclaredAs.Object, "org.example.Foo$", List(), List(), Some(OffsetSourcePosition(`fooFile`, 28)), None)) =>
-                fooObjectIdVal
-              case _ =>
-                fail("type by name for Foo object does not match expectations, got: " + fooObjectByNameOpt)
-            }
 
             //-----------------------------------------------------------------------------------------------
             // public symbol search - java.io.File
@@ -99,29 +83,6 @@ class BasicWorkflow extends WordSpec with Matchers
                 TypeSearchResult("java.util.Random", "Random", DeclaredAs.Class, Some(_)),
                 TypeSearchResult("scala.util.Random", "Random", DeclaredAs.Class, Some(_)))) =>
               // this is a pretty ropey test at the best of times
-            }
-
-            //-----------------------------------------------------------------------------------------------
-            // type by id
-
-            project ! TypeByIdReq(intTypeId)
-            val typeByIdOpt = expectMsgType[Option[TypeInfo]]
-            val intTypeInspectInfo = typeByIdOpt match {
-              case Some(ti @ BasicTypeInfo("Int", `intTypeId`, DeclaredAs.Class, "scala.Int", List(), List(), Some(_), None)) =>
-                ti
-              case _ =>
-                fail("type by id does not match expectations, got " + typeByIdOpt)
-            }
-
-            //-----------------------------------------------------------------------------------------------
-            // inspect type by id
-            project ! InspectTypeByIdReq(intTypeId)
-            val inspectByIdOpt = expectMsgType[Option[TypeInspectInfo]]
-
-            inspectByIdOpt match {
-              case Some(TypeInspectInfo(`intTypeInspectInfo`, Some(intCompanionId), supers, _)) =>
-              case _ =>
-                fail("inspect by id does not match expectations, got: " + inspectByIdOpt)
             }
 
             //-----------------------------------------------------------------------------------------------
@@ -161,43 +122,72 @@ class BasicWorkflow extends WordSpec with Matchers
             // loaded by the pres compiler
             project ! SymbolAtPointReq(Left(fooFile), 276)
             expectMsgPF() {
-              case Some(SymbolInfo("testMethod", "testMethod", Some(OffsetSourcePosition(`fooFile`, 114)), ArrowTypeInfo("(i: Int, s: String)Int", 126, BasicTypeInfo("Int", 1, DeclaredAs.Class, "scala.Int", List(), List(), None, None), List(ParamSectionInfo(List((i, BasicTypeInfo("Int", 1, DeclaredAs.Class, "scala.Int", List(), List(), None, None)), (s, BasicTypeInfo("String", 39, DeclaredAs.Class, "java.lang.String", List(), List(), None, None))), false))), true, Some(_))) =>
+              case Some(SymbolInfo("testMethod", "testMethod", Some(OffsetSourcePosition(`fooFile`, 114)), ArrowTypeInfo("(i: Int, s: String)Int", BasicTypeInfo("Int", DeclaredAs.Class, "scala.Int", List(), List(), None), List(ParamSectionInfo(List((i, BasicTypeInfo("Int", DeclaredAs.Class, "scala.Int", List(), List(), None)), (s, BasicTypeInfo("String", DeclaredAs.Class, "java.lang.String", List(), List(), None))), false))), true)) =>
             }
 
             // M-.  external symbol
             project ! SymbolAtPointReq(Left(fooFile), 190)
             expectMsgPF() {
-              case Some(SymbolInfo("apply", "apply", Some(_),
-                ArrowTypeInfo("[A, B](elems: (A, B)*)CC[A,B]", _,
-                  BasicTypeInfo("CC", _, DeclaredAs.Nil, "scala.collection.generic.CC",
+              case Some(SymbolInfo("Map", "Map", Some(OffsetSourcePosition(_, _)),
+                BasicTypeInfo("Map$", DeclaredAs.Object, "scala.collection.immutable.Map$", List(), List(), None),
+                false)) =>
+            }
+
+            project ! SymbolAtPointReq(Left(fooFile), 343)
+            expectMsgPF() {
+              case Some(SymbolInfo("fn", "fn", Some(OffsetSourcePosition(`fooFile`, 304)),
+                BasicTypeInfo("Function1", DeclaredAs.Trait, "scala.Function1",
+                  List(
+                    BasicTypeInfo("String", DeclaredAs.Class, "java.lang.String", List(), List(), None),
+                    BasicTypeInfo("Int", DeclaredAs.Class, "scala.Int", List(), List(), None)),
+                  List(), None),
+                false)) =>
+            }
+
+            project ! SymbolAtPointReq(Left(barFile), 150)
+            expectMsgPF() {
+              case Some(SymbolInfo("apply", "apply", Some(OffsetSourcePosition(`barFile`, 59)),
+                ArrowTypeInfo("(bar: String, baz: Int)org.example.Bar.Foo",
+                  BasicTypeInfo("Foo", DeclaredAs.Class, "org.example.Bar$$Foo", List(), List(), None),
+                  List(ParamSectionInfo(
                     List(
-                      BasicTypeInfo("A", _, DeclaredAs.Nil, "scala.collection.generic.A", List(), List(), None, None),
-                      BasicTypeInfo("B", _, DeclaredAs.Nil, "scala.collection.generic.B", List(), List(), None, None)
-                      ), List(), None, None),
-                  List(ParamSectionInfo(List(
-                    ("elems", BasicTypeInfo("<repeated>", _, DeclaredAs.Class, "scala.<repeated>", List(
-                      BasicTypeInfo("Tuple2", _, DeclaredAs.Class, "scala.Tuple2", List(
-                        BasicTypeInfo("A", _, DeclaredAs.Nil, "scala.collection.generic.A", List(), List(), None, None),
-                        BasicTypeInfo("B", _, DeclaredAs.Nil, "scala.collection.generic.B", List(), List(), None, None)
-                        ), List(), None, None)), List(), None, None))), false))), true, Some(_))) =>
+                      ("bar", BasicTypeInfo("String", DeclaredAs.Class, "java.lang.String", List(), List(), None)),
+                      ("baz", BasicTypeInfo("Int", DeclaredAs.Class, "scala.Int", List(), List(), None))), false))),
+                true)) =>
+            }
+
+            project ! SymbolAtPointReq(Left(barFile), 193)
+            expectMsgPF() {
+              case Some(SymbolInfo("copy", "copy", Some(OffsetSourcePosition(`barFile`, 59)),
+                ArrowTypeInfo("(bar: String, baz: Int)org.example.Bar.Foo",
+                  BasicTypeInfo("Foo", DeclaredAs.Class, "org.example.Bar$$Foo", List(), List(), None),
+                  List(ParamSectionInfo(
+                    List(
+                      ("bar", BasicTypeInfo("String", DeclaredAs.Class, "java.lang.String", List(), List(), None)),
+                      ("baz", BasicTypeInfo("Int", DeclaredAs.Class, "scala.Int", List(), List(), None))), false))),
+                true)) =>
             }
 
             // C-c C-v p Inspect source of current package
             project ! InspectPackageByPathReq("org.example")
             expectMsgPF() {
               case Some(PackageInfo("example", "org.example", List(
-                BasicTypeInfo("Bloo", _: Int, DeclaredAs.Class, "org.example.Bloo", List(), List(), Some(_), None),
-                BasicTypeInfo("Bloo$", _: Int, DeclaredAs.Object, "org.example.Bloo$", List(), List(), Some(_), None),
-                BasicTypeInfo("Blue", _: Int, DeclaredAs.Class, "org.example.Blue", List(), List(), Some(_), None),
-                BasicTypeInfo("Blue$", _: Int, DeclaredAs.Object, "org.example.Blue$", List(), List(), Some(_), None),
-                BasicTypeInfo("CaseClassWithCamelCaseName", _: Int, DeclaredAs.Class, "org.example.CaseClassWithCamelCaseName", List(), List(), Some(_), None),
-                BasicTypeInfo("CaseClassWithCamelCaseName$", _: Int, DeclaredAs.Object, "org.example.CaseClassWithCamelCaseName$", List(), List(), Some(_), None),
-                BasicTypeInfo("Foo", _: Int, DeclaredAs.Class, "org.example.Foo", List(), List(), Some(_), None),
-                BasicTypeInfo("Foo$", _: Int, DeclaredAs.Object, "org.example.Foo$", List(), List(), Some(_), None),
-                BasicTypeInfo("Test1", _: Int, DeclaredAs.Class, "org.example.Test1", List(), List(), None, None),
-                BasicTypeInfo("Test1$", _: Int, DeclaredAs.Object, "org.example.Test1$", List(), List(), None, None),
-                BasicTypeInfo("package$", _: Int, DeclaredAs.Object, "org.example.package$", List(), List(), None, None),
-                BasicTypeInfo("package$", _: Int, DeclaredAs.Object, "org.example.package$", List(), List(), None, None)))) =>
+                BasicTypeInfo("Bar", DeclaredAs.Class, "org.example.Bar", List(), List(), Some(_)),
+                BasicTypeInfo("Bar$", DeclaredAs.Object, "org.example.Bar$", List(), List(), Some(_)),
+                BasicTypeInfo("Bloo", DeclaredAs.Class, "org.example.Bloo", List(), List(), Some(_)),
+                BasicTypeInfo("Bloo$", DeclaredAs.Object, "org.example.Bloo$", List(), List(), Some(_)),
+                BasicTypeInfo("Blue", DeclaredAs.Class, "org.example.Blue", List(), List(), Some(_)),
+                BasicTypeInfo("Blue$", DeclaredAs.Object, "org.example.Blue$", List(), List(), Some(_)),
+                BasicTypeInfo("CaseClassWithCamelCaseName", DeclaredAs.Class, "org.example.CaseClassWithCamelCaseName", List(), List(), Some(_)),
+                BasicTypeInfo("CaseClassWithCamelCaseName$", DeclaredAs.Object, "org.example.CaseClassWithCamelCaseName$", List(), List(), Some(_)),
+                BasicTypeInfo("Foo", DeclaredAs.Class, "org.example.Foo", List(), List(), Some(_)),
+                BasicTypeInfo("Foo$", DeclaredAs.Object, "org.example.Foo$", List(), List(), Some(_)),
+                BasicTypeInfo("Test1", DeclaredAs.Class, "org.example.Test1", List(), List(), None),
+                BasicTypeInfo("Test1$", DeclaredAs.Object, "org.example.Test1$", List(), List(), None),
+                BasicTypeInfo("Test2", DeclaredAs.Class, "org.example.Test2", List(), List(), None),
+                BasicTypeInfo("Test2$", DeclaredAs.Object, "org.example.Test2$", List(), List(), None),
+                BasicTypeInfo("package$", DeclaredAs.Object, "org.example.package$", List(), List(), None),
+                BasicTypeInfo("package$", DeclaredAs.Object, "org.example.package$", List(), List(), None)))) =>
             }
 
             // expand selection around 'val foo'

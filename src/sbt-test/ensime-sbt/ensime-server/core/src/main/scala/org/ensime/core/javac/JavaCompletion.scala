@@ -1,5 +1,9 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.core.javac
 
+import akka.actor.ActorRef
+import akka.event.slf4j.SLF4JLogging
 import com.sun.source.tree.{ MemberSelectTree, MethodInvocationTree, Tree, IdentifierTree }
 import com.sun.source.util.TreePath
 import javax.lang.model.`type`.{ DeclaredType, PrimitiveType, ReferenceType, TypeKind, TypeMirror }
@@ -13,10 +17,16 @@ import java.nio.charset.Charset
 import com.sun.source.tree.Scope
 import scala.collection.mutable.HashSet;
 import scala.collection.mutable.ArrayBuffer;
+import scala.concurrent.Await
+import scala.concurrent.duration.Duration
 
-trait JavaCompletion { self: JavaCompiler =>
+trait JavaCompletion extends Helpers with SLF4JLogging {
 
   import CompletionUtil._
+
+  protected def scopeForPoint(file: SourceFileInfo, offset: Int): Option[(CompilationInfo, Scope)]
+  protected def pathToPoint(file: SourceFileInfo, offset: Int): Option[(CompilationInfo, TreePath)]
+  protected def indexer: ActorRef
 
   def completionsAt(info: SourceFileInfo, offset: Int, maxResultsArg: Int, caseSens: Boolean): CompletionInfoList = {
     val maxResults = if (maxResultsArg == 0) Int.MaxValue else maxResultsArg
@@ -37,13 +47,13 @@ trait JavaCompletion { self: JavaCompiler =>
 
     log.info("CONSTRUCTING: " + constructing)
 
-    val indexAfterTarget = offset - defaultPrefix.length - 1
+    val indexAfterTarget = Math.max(0, offset - defaultPrefix.length - 1)
 
     val precedingChar = s(indexAfterTarget)
 
     val isMemberAccess = precedingChar == '.'
 
-    val candidates = (if (ImportSubtypeRegexp.findFirstMatchIn(preceding).isDefined) {
+    val candidates: List[CompletionInfo] = (if (ImportSubtypeRegexp.findFirstMatchIn(preceding).isDefined) {
       // Erase the trailing partial subtype (it breaks type resolution).
       val patched = s.substring(0, indexAfterTarget) + " " + s.substring(indexAfterTarget + defaultPrefix.length + 1);
       (pathToPoint(SourceFileInfo(info.file, Some(patched), None), indexAfterTarget - 1) map {
@@ -63,7 +73,7 @@ trait JavaCompletion { self: JavaCompiler =>
       // TODO how to avoid allocating a new string? buffer of immutable string slices?
       // Erase the trailing partial member (it breaks type resolution).
       val patched = s.substring(0, indexAfterTarget) + ".wait()" + s.substring(indexAfterTarget + defaultPrefix.length + 1);
-      (pathToPoint(SourceFileInfo(info.file, Some(patched), None), indexAfterTarget) flatMap {
+      (pathToPoint(SourceFileInfo(info.file, Some(patched), None), indexAfterTarget + 1) flatMap {
         case (info: CompilationInfo, path: TreePath) => {
           getEnclosingMemberSelectTree(path).map { m =>
             memberCandidates(info, m.getExpression(), defaultPrefix, false, caseSens)
@@ -71,11 +81,21 @@ trait JavaCompletion { self: JavaCompiler =>
         }
       })
     } else {
+
+      // Kick off an index search if the name looks like a type.
+      val typeSearch = if (TypeNameRegex.findFirstMatchIn(defaultPrefix).isDefined) {
+        Some(fetchTypeSearchCompletions(defaultPrefix, maxResults, indexer))
+      } else None
+
       (scopeForPoint(info, indexAfterTarget) map {
         case (info: CompilationInfo, s: Scope) => {
           scopeMemberCandidates(info, s, defaultPrefix, caseSens, constructing)
         }
-      })
+      }) map { scopeCandidates =>
+        val typeSearchResult = typeSearch.flatMap(Await.result(_, Duration.Inf)).getOrElse(List())
+        scopeCandidates ++ typeSearchResult
+      }
+
     }).getOrElse(List())
     CompletionInfoList(defaultPrefix, candidates.sortWith({ (c1, c2) =>
       c1.relevance > c2.relevance ||
@@ -212,24 +232,25 @@ trait JavaCompletion { self: JavaCompiler =>
     CompletionInfo(
       s,
       CompletionSignature(
-        List(e.getParameters().map { p => (p.getSimpleName.toString, localTypeName(p.asType)) }.toList),
-        localTypeName(e.getReturnType())
+        List(e.getParameters().map { p => (p.getSimpleName.toString, p.asType.toString) }.toList),
+        e.getReturnType.toString,
+        false
       ),
-      -1, true, relavence, None
+      true, relavence, None
     )
   }
 
   private def fieldInfo(e: VariableElement, relavence: Int): CompletionInfo = {
     val s = e.getSimpleName.toString
     CompletionInfo(
-      s, CompletionSignature(List(), localTypeName(e.asType())), -1, false, relavence, None
+      s, CompletionSignature(List(), e.asType.toString, false), false, relavence, None
     )
   }
 
   private def typeInfo(e: TypeElement, relavence: Int): CompletionInfo = {
     val s = e.getSimpleName.toString
     CompletionInfo(
-      s, CompletionSignature(List(), localTypeName(e.asType())), -1, false, relavence, None
+      s, CompletionSignature(List(), e.asType.toString, false), false, relavence, None
     )
   }
 
@@ -244,14 +265,6 @@ trait JavaCompletion { self: JavaCompiler =>
     val s = tm.toString
     val (front, back) = s.split("\\.").partition { s => s.forall(Character.isLowerCase) }
     if (back.isEmpty) s else back.mkString(".")
-  }
-
-  private def typeMirror(info: CompilationInfo, t: Tree): Option[TypeMirror] = {
-    Option(info.getTrees().getTypeMirror(info.getTrees().getPath(info.getCompilationUnit(), t)))
-  }
-
-  private def typeElement(info: CompilationInfo, t: Tree): Option[Element] = {
-    typeMirror(info, t).map(info.getTypes().asElement)
   }
 
   private def contentsAsString(sf: SourceFileInfo, charset: Charset) = sf match {

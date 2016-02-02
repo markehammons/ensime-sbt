@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.fixture
 
 import akka.actor.ActorSystem
@@ -13,7 +15,7 @@ trait IsolatedSearchServiceFixture extends IsolatedSourceResolverFixture {
     try {
       testCode(config, searchService)
     } finally {
-      searchService.shutdown()
+      Await.ready(searchService.shutdown(), Duration.Inf)
       actorSystem.shutdown()
       actorSystem.awaitTermination(10.seconds)
     }
@@ -34,7 +36,7 @@ trait SharedSearchServiceFixture
   }
 
   override def afterAll(): Unit = {
-    Await.ready(_search.shutdown(), 10.seconds)
+    Await.ready(_search.shutdown(), Duration.Inf)
     super.afterAll()
   }
 

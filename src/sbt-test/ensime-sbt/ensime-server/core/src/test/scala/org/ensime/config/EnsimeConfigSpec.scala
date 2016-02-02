@@ -1,7 +1,10 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.config
 
 import org.scalatest.{ FunSpec, Matchers }
 import org.ensime.util.file._
+import org.ensime.util.EscapingStringInterpolation
 
 import org.ensime.api._
 

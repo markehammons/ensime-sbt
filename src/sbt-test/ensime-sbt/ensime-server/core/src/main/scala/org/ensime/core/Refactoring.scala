@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.core
 
 import java.io.BufferedWriter
@@ -63,6 +65,29 @@ trait RefactoringHandler { self: Analyzer =>
         effects += procedureId -> effect
         effect
 
+      case Left(failure) =>
+        failure
+    }
+  }
+
+  def handleRefactorRequest(req: RefactorReq): RpcResponse = {
+    val cs = charset
+    val procedureId = req.procId
+    val refactor = req.params
+    val result = scalaCompiler.askPrepareRefactor(procedureId, refactor)
+
+    result match {
+      case Right(effect: RefactorEffect) => {
+        FileUtils.writeDiffChanges(effect.changes, cs) match {
+          case Right(f) =>
+            new RefactorDiffEffect(
+              effect.procedureId,
+              effect.refactorType,
+              f
+            )
+          case Left(err) => RefactorFailure(effect.procedureId, err.toString)
+        }
+      }
       case Left(failure) =>
         failure
     }
