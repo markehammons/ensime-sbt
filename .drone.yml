@@ -5,10 +5,8 @@ build:
     - SONATYPE_USERNAME=$$SONATYPE_USERNAME
     - SONATYPE_PASSWORD=$$SONATYPE_PASSWORD
     - SCALA_VERSION=2.10.6
-    - JDK_LANGTOOLS_SRC=/opt/java/openjdk6-langtools-src.zip
   commands:
     - git log | head -n 20
-    - cp -vr src/sbt-test/ensime-sbt/ensime-server/openjdk-langtools /opt/java
     - sbt ++$SCALA_VERSION compile ;
       if [ $(git diff | wc -l) -ge 1 ] ; then
         echo "Code formatting does not meet the project's standards:" ;

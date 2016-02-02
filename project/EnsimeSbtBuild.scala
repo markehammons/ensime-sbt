@@ -12,12 +12,6 @@ import util.Properties
 
 object EnsimeSbtBuild extends Build {
 
-  if (!sys.env.contains("JDK_LANGTOOLS_SRC"))
-    throw new IllegalArgumentException(
-      // e.g. one of src/sbt-test/ensime-sbt/ensime-server/openjdk-langtools
-      s"ensime-sbt requires the environment variable JDK_LANGTOOLS_SRC"
-    )
-
   override val settings = super.settings ++ Seq(
     organization := "org.ensime",
     version := "0.3.4-SNAPSHOT",
