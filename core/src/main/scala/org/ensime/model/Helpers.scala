@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.model
 
 import scala.tools.nsc.interactive.Global
@@ -54,37 +56,12 @@ trait Helpers { self: Global =>
     if (isArrowType(tpe)) {
       CompletionSignature(
         tpe.paramss.map { sect =>
-          sect.map { p => (p.name.toString, typeShortNameWithArgs(p.tpe)) }
+          sect.map { p => (p.name.toString, typeFullName(p.tpe, true)) }
         },
-        typeShortNameWithArgs(tpe.finalResultType)
+        typeFullName(tpe.finalResultType, true),
+        tpe.paramss.exists { sect => sect.exists(_.isImplicit) }
       )
-    } else CompletionSignature(List.empty, resultTypeName(tpe))
-  }
-
-  /**
-   * Convenience method to generate a String describing the type. Omit
-   * the package name. Include the arguments postfix.
-   *
-   * Used for type-names of symbol and member completions
-   */
-  def typeShortNameWithArgs(tpe: Type): String = {
-    if (isArrowType(tpe)) {
-      (tpe.paramss.map { sect =>
-        "(" +
-          sect.map { p => typeShortNameWithArgs(p.tpe) }.mkString(", ") +
-          ")"
-      }.mkString(" => ")
-        + " => " +
-        typeShortNameWithArgs(tpe.finalResultType))
-    } else resultTypeName(tpe)
-  }
-
-  def resultTypeName(tpe: Type): String = {
-    typeShortName(tpe) + (if (tpe.typeArgs.size > 0) {
-      "[" +
-        tpe.typeArgs.map(typeShortNameWithArgs).mkString(", ") +
-        "]"
-    } else { "" })
+    } else CompletionSignature(List.empty, typeFullName(tpe, true), false)
   }
 
   /**
@@ -119,7 +96,7 @@ trait Helpers { self: Global =>
   /**
    * Generate qualified name, without args postfix.
    */
-  def typeFullName(tpe: Type): String = {
+  def typeFullName(tpe: Type, withTpeArgs: Boolean = false): String = {
     def nestedClassName(sym: Symbol): String = {
       outerClass(sym) match {
         case Some(outerSym) =>
@@ -133,11 +110,19 @@ trait Helpers { self: Global =>
       if (typeSym.enclosingPackage == NoSymbol)
         ""
       else typeSym.enclosingPackage.fullName + "."
-    if (typeSym.isNestedClass) {
+
+    val withoutArgs = if (typeSym.isNestedClass) {
       prefix + nestedClassName(typeSym)
     } else {
       prefix + typeShortName(typeSym)
     }
+    if (withTpeArgs) {
+      withoutArgs + (if (tpe.typeArgs.size > 0) {
+        "[" +
+          tpe.typeArgs.map(typeFullName(_, true)).mkString(", ") +
+          "]"
+      } else { "" })
+    } else withoutArgs
   }
 
   def typeShortName(tpe: Type): String = {

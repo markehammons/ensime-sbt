@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 /*
  * This file contains derivative works that require the following
  * header to be displayed:
@@ -50,6 +52,9 @@ import org.slf4j.LoggerFactory
 
 import scala.collection.mutable
 import scala.reflect.internal.util.{ BatchSourceFile, RangePosition, SourceFile }
+import scala.reflect.io.PlainFile
+import scala.reflect.io.VirtualFile
+
 import scala.tools.nsc.Settings
 import scala.tools.nsc.interactive.{ CompilerControl, Global }
 import scala.tools.nsc.io.AbstractFile
@@ -105,9 +110,6 @@ trait RichCompilerControl extends CompilerControl with RefactoringControl with C
   def askTypeInfoAt(p: Position): Option[TypeInfo] =
     askOption(typeAt(p).map(TypeInfo(_, PosNeededYes))).flatten
 
-  def askTypeInfoById(id: Int): Option[TypeInfo] =
-    askOption(typeById(id).map(TypeInfo(_, PosNeededYes))).flatten
-
   def askTypeInfoByName(name: String): Option[TypeInfo] =
     askOption(typeByName(name).map(TypeInfo(_, PosNeededYes))).flatten
 
@@ -128,9 +130,6 @@ trait RichCompilerControl extends CompilerControl with RefactoringControl with C
       }
     ) yield infos).flatten
   }
-
-  def askCallCompletionInfoById(id: Int): Option[CallCompletionInfo] =
-    askOption(typeById(id).map(CallCompletionInfo(_))).flatten
 
   def askPackageByPath(path: String): Option[PackageInfo] =
     askOption(PackageInfo.fromPath(path))
@@ -172,9 +171,6 @@ trait RichCompilerControl extends CompilerControl with RefactoringControl with C
   def askReloadExistingFiles() =
     askReloadFiles(loadedFiles)
 
-  def askInspectTypeById(id: Int): Option[TypeInspectInfo] =
-    askOption(typeById(id).map(inspectType)).flatten
-
   def askInspectTypeAt(p: Position): Option[TypeInspectInfo] =
     askOption(inspectTypeAt(p)).flatten
 
@@ -206,8 +202,6 @@ trait RichCompilerControl extends CompilerControl with RefactoringControl with C
       ).getOrElse(List.empty)
     )
 
-  def askClearTypeCache(): Unit = clearTypeCache()
-
   def askNotifyWhenReady(): Unit = ask(setNotifyWhenReady)
 
   // WARNING: be really careful when creating BatchSourceFiles. there
@@ -227,25 +221,30 @@ trait RichCompilerControl extends CompilerControl with RefactoringControl with C
   def createSourceFile(file: SourceFileInfo): BatchSourceFile = file match {
     case SourceFileInfo(f, None, None) =>
       new BatchSourceFile(
-        AbstractFile.getFile(f.getPath),
+        new PlainFile(f.getPath),
         f.readString()(charset).toCharArray
       )
 
     case SourceFileInfo(f, Some(contents), None) =>
       new BatchSourceFile(
-        AbstractFile.getFile(f.getPath),
+        new PlainFile(f.getPath),
         contents.toCharArray
       )
 
     case SourceFileInfo(f, None, Some(contentsIn)) =>
       new BatchSourceFile(
-        AbstractFile.getFile(f.getPath),
+        new PlainFile(f.getPath),
         contentsIn.readString()(charset).toCharArray
       )
   }
 
   def askLinkPos(sym: Symbol, path: AbstractFile): Option[Position] =
     askOption(linkPos(sym, createSourceFile(path)))
+
+  def askStructure(fileInfo: SourceFile): List[StructureViewMember] =
+    askOption(structureView(fileInfo))
+      .getOrElse(List.empty)
+
 }
 
 class RichPresentationCompiler(
@@ -261,7 +260,8 @@ class RichPresentationCompiler(
 ) extends Global(settings, richReporter)
     with ModelBuilders with RichCompilerControl
     with RefactoringImpl with Completion with Helpers
-    with PresentationCompilerBackCompat with PositionBackCompat {
+    with PresentationCompilerBackCompat with PositionBackCompat
+    with StructureViewBuilder {
 
   val logger = LoggerFactory.getLogger(this.getClass)
 
@@ -365,7 +365,6 @@ class RichPresentationCompiler(
     val parents = tpe.parents
     new TypeInspectInfo(
       TypeInfo(tpe, PosNeededAvail),
-      companionTypeOf(tpe).map(cacheType),
       prepareSortedInterfaceInfo(typePublicMembers(tpe.asInstanceOf[Type]), parents)
     )
   }
@@ -377,7 +376,6 @@ class RichPresentationCompiler(
       val preparedMembers = prepareSortedInterfaceInfo(members, parents)
       new TypeInspectInfo(
         TypeInfo(tpe, PosNeededAvail),
-        companionTypeOf(tpe).map(cacheType),
         preparedMembers
       )
     }).orElse {
@@ -446,6 +444,11 @@ class RichPresentationCompiler(
       && !sym.nameString.contains("$"))
   }
 
+  private def noDefinitionFound(tree: Tree) = {
+    logger.warn("No definition found. Please report to https://github.com/ensime/ensime-server/issues/492 with description of what did you expected. symbolAt for " + tree.getClass + ": " + tree)
+    Nil
+  }
+
   protected def symbolAt(pos: Position): Option[Symbol] = {
     val tree = wrapTypedTreeAt(pos)
     // This code taken mostly verbatim from Scala IDE sources. Licensed
@@ -470,12 +473,16 @@ class RichPresentationCompiler(
           }
         case Annotated(atp, _) =>
           List(atp.symbol)
-        case st: SymTree =>
+        case ap @ Select(qualifier, nme.apply) =>
+          // If we would like to give user choice if to go to method apply or value
+          // like Eclipse is doing we would need to return:
+          // List(qualifier.symbol, ap.symbol)
+          List(qualifier.symbol)
+        case st if st.symbol ne null =>
           logger.debug("using symbol of " + tree.getClass + " tree")
-          List(tree.symbol)
+          List(st.symbol)
         case _ =>
-          logger.warn("symbolAt for " + tree.getClass + ": " + tree)
-          Nil
+          noDefinitionFound(tree)
       }
     wannabes.find(_.exists)
   }
@@ -588,4 +595,3 @@ class RichPresentationCompiler(
     wrap[Position](r => new AskLinkPosItem(sym, source, r).apply(), t => throw t)
 
 }
-

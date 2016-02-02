@@ -1,22 +1,31 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.core
 
 import java.io.File
 
 import akka.event.slf4j.SLF4JLogging
+import org.ensime.api.OffsetSourcePosition
+import org.ensime.api.LineSourcePosition
+import org.ensime.api.SourceFileInfo
 import org.ensime.core.javac.JavaCompiler
+import org.ensime.core.javac.JavaFqn
+import org.ensime.core.javac.Helpers
 import org.ensime.fixture._
 import org.ensime.indexer.EnsimeVFS
+import org.ensime.indexer.SearchServiceTestUtils
 import org.scalatest._
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 
 class JavaCompilerSpec extends FlatSpec with Matchers
     with IsolatedJavaCompilerFixture
+    with SearchServiceTestUtils
     with SLF4JLogging {
 
   val original = EnsimeConfigFixture.SimpleTestProject
 
-  "JavaCompiler" should "generate compilation notes" in withJavaCompiler { (_, config, cc, store) =>
+  "JavaCompiler" should "generate compilation notes" in withJavaCompiler { (_, config, cc, store, search) =>
     runForPositionInCompiledSource(config, cc,
       "import java.io.File;",
       "class Test1 {",
@@ -26,7 +35,7 @@ class JavaCompilerSpec extends FlatSpec with Matchers
     assert(!(store.notes.isEmpty))
   }
 
-  it should "find type at point" in withJavaCompiler { (_, config, cc, store) =>
+  it should "find type at point" in withJavaCompiler { (_, config, cc, store, search) =>
     runForPositionInCompiledSource(config, cc,
       "import java.io.File;",
       "class Tes@0@t1 {",
@@ -44,7 +53,131 @@ class JavaCompilerSpec extends FlatSpec with Matchers
       }
   }
 
-  it should "find completions at point" in withJavaCompiler { (_, config, cc, store) =>
+  it should "link symbols to their source positions" in withJavaCompiler { (_, config, cc, store, _) =>
+    val test1 = SourceFileInfo(new File(config.rootDir, "testing/simple/src/main/java/org/example/Test1.java"))
+    val test2 = SourceFileInfo(new File(config.rootDir, "testing/simple/src/main/java/org/example/Test2.java"))
+
+    cc.askLinkPos(JavaFqn("org.example", "Test2", None), test2) should matchPattern { case Some(OffsetSourcePosition(f, 22)) => }
+    cc.askLinkPos(JavaFqn("org.example", "Foo", None), test2) should matchPattern { case None => }
+    cc.askLinkPos(JavaFqn("org.example", "Test2.Bar", None), test2) should matchPattern { case Some(OffsetSourcePosition(f, 260)) => }
+    //    cc.askLinkPos(JavaFqn("org.example", "Test2", Some("compute()")), test2) should matchPattern { case Some(OffsetSourcePosition(f, 58)) => }
+
+  }
+
+  it should "find symbol at point" in withJavaCompiler { (_, config, cc, store, search) =>
+    implicit val searchService = search
+    refresh()
+    runForPositionInCompiledSource(config, cc,
+      "package org.example;",
+      "import java.io.File;",
+      "class Test1 {",
+      "  private class Foo { public Foo() {} }",
+      "  public static final int CONST = 2;",
+      "  private void main(String[] args) {",
+      "    int foo = 1;",
+      "    System.out.println(ar@1@gs);",
+      "    System.out.pr@3@intln(new Fo@2@o());",
+      "    System.out.println(new Fi@4@le(\".\"));",
+      "    System.out.println(Tes@5@t2.com@6@pute());",
+      "    System.out.println(comp@7@ute(2, 3));",
+      "    System.out.println(CO@8@NST);",
+      "    System.out.println(@11@fo@0@o@12@);",
+      "    int k = 2;",
+      "    System.out.println( @13@k@14@ );",
+      "  }",
+      "  private static int compute(int a, int b) {",
+      "    return a + b;",
+      "  }",
+      "  private static String hello(D@9@ay day) {",
+      "    if (day == Day.MO@10@N) return \"monday\";",
+      "    return \"tues\";",
+      "  }",
+      "  public enum Day { MON, TUES }",
+      "}") { (sf, offset, label, cc) =>
+        val info = cc.askSymbolAtPoint(sf, offset).get
+        label match {
+          case "0" | "11" | "12" =>
+            info.name shouldBe "foo"
+            info.localName shouldBe "foo"
+            info.`type`.name shouldBe "int"
+            info.isCallable shouldBe false
+            info.declPos should matchPattern { case Some(OffsetSourcePosition(f, 174)) if f.getName == "Test1.java" => }
+          case "1" =>
+            info.name shouldBe "args"
+            info.localName shouldBe "args"
+            info.`type`.name shouldBe "java.lang.String[]"
+            info.isCallable shouldBe false
+            info.declPos should matchPattern { case Some(OffsetSourcePosition(f, 153)) if f.getName == "Test1.java" => }
+          case "2" =>
+            info.name shouldBe "org.example.Test1.Foo"
+            info.localName shouldBe "Foo"
+            info.`type`.name shouldBe "org.example.Test1.Foo"
+            info.isCallable shouldBe false
+            info.declPos should matchPattern { case Some(OffsetSourcePosition(f, 58)) if f.getName == "Test1.java" => }
+          case "3" =>
+            info.name shouldBe "java.io.PrintStream.println(java.lang.Object)"
+            info.localName shouldBe "println"
+            info.`type`.name shouldBe "(java.lang.Object)void"
+            info.isCallable shouldBe true
+          case "4" =>
+            info.name shouldBe "java.io.File"
+            info.localName shouldBe "File"
+            info.`type`.name shouldBe "java.io.File"
+            info.isCallable shouldBe false
+          case "5" =>
+            info.name shouldBe "org.example.Test2"
+            info.localName shouldBe "Test2"
+            info.`type`.name shouldBe "org.example.Test2"
+            info.isCallable shouldBe false
+            info.declPos should matchPattern { case Some(OffsetSourcePosition(f, 22)) if f.getName == "Test2.java" => }
+          case "6" =>
+            info.name shouldBe "org.example.Test2.compute()"
+            info.localName shouldBe "compute"
+            info.`type`.name shouldBe "()int"
+            info.isCallable shouldBe true
+            // NOTE: we should find an OffsetSourcePosition here as the source enters
+            // the compiler's working set in case "5" above.
+            // TODO - However if the 'element' is not found, we'll fall through to indexer lookup.
+            // look into more exhaustive ways of finding the element.
+            info.declPos should matchPattern {
+              case Some(LineSourcePosition(f, 8)) if f.getName == "Test2.java" =>
+              case Some(OffsetSourcePosition(f, 48)) if f.getName == "Test2.java" =>
+            }
+          case "7" =>
+            {}
+            info.name shouldBe "org.example.Test1.compute(int,int)"
+            info.localName shouldBe "compute"
+            info.`type`.name shouldBe "(int,int)int"
+            info.isCallable shouldBe true
+            info.declPos should matchPattern { case Some(OffsetSourcePosition(f, 481)) if f.getName == "Test1.java" => }
+          case "8" =>
+            info.name shouldBe "org.example.Test1.CONST"
+            info.localName shouldBe "CONST"
+            info.`type`.name shouldBe "int"
+            info.isCallable shouldBe false
+            info.declPos should matchPattern { case Some(OffsetSourcePosition(f, 98)) if f.getName == "Test1.java" => }
+          case "9" =>
+            info.name shouldBe "org.example.Test1.Day"
+            info.localName shouldBe "Day"
+            info.`type`.name shouldBe "org.example.Test1.Day"
+            info.isCallable shouldBe false
+            info.declPos should matchPattern { case Some(OffsetSourcePosition(f, 653)) if f.getName == "Test1.java" => }
+          case "10" =>
+            info.name shouldBe "org.example.Test1.Day.MON"
+            info.localName shouldBe "MON"
+            info.`type`.name shouldBe "org.example.Test1.Day"
+            info.isCallable shouldBe false
+            // Don't specify offset pos here as Java 6 seems to have a problem locating enums
+            info.declPos should matchPattern { case Some(OffsetSourcePosition(f, i: Int)) if f.getName == "Test1.java" => }
+          case "13" | "14" =>
+            info.name shouldBe "k"
+            info.`type`.name shouldBe "int"
+            info.isCallable shouldBe false
+        }
+      }
+  }
+
+  it should "find completions at point" in withJavaCompiler { (_, config, cc, store, search) =>
     runForPositionInCompiledSource(config, cc,
       "import java.io.File;",
       "import java.lang.Str@5@;",
@@ -55,7 +188,7 @@ class JavaCompilerSpec extends FlatSpec with Matchers
       "  public static class TestInner {",
       "    public int maxValue = 10;",
       "    private void main(String foo, String bar) {",
-      "      File f = new File();",
+      "      File f = new File(\".\");",
       "      f.toSt@0@;",
       "      System.out.println(f.toStr@1@);",
       "      System.out.println((f).toStr@2@);",
@@ -67,7 +200,8 @@ class JavaCompilerSpec extends FlatSpec with Matchers
       "      System.out.println(MAX_@11@);",
       "      System.out.println(new Inte@12@);",
       "      int testinner = 5;",
-      "      TestInn@13@",
+      "      System.out.println(f.toStr@1@);",
+      "      System.out.@14@",
       "    }",
       "  }",
       "}") { (sf, offset, label, cc) =>
@@ -92,11 +226,22 @@ class JavaCompilerSpec extends FlatSpec with Matchers
             // exact matches should be preferred
             assert(info.completions(0).name == "TestInner")
             assert(info.completions(1).name == "testinner")
+
+          case "14" => assert(info.completions.exists(_.name == "println"))
         }
       }
   }
 
-  it should "find doc sig at point" in withJavaCompiler { (_, config, cc, store) =>
+  it should "find completion at beginning of file" in withJavaCompiler { (_, config, cc, store, search) =>
+    runForPositionInCompiledSource(config, cc, "Sys@0@") { (sf, offset, label, cc) =>
+      val info = cc.askCompletionsAtPoint(sf, offset, 0, false)
+      label match {
+        case "0" => assert(info.completions.exists(_.name == "System"))
+      }
+    }
+  }
+
+  it should "find doc sig at point" in withJavaCompiler { (_, config, cc, store, search) =>
     runForPositionInCompiledSource(config, cc,
       "import java.io.Fi@5@le;",
       "class Test1 {",

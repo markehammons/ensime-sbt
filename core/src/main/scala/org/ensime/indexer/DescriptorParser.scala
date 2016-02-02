@@ -1,62 +1,95 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.indexer
 
-import org.ensime.indexer.ClassName._
-import org.ensime.sexp.util.ParboiledParser
-import org.parboiled.errors.{ ErrorUtils, ParsingException }
-import org.parboiled.scala._
+import org.parboiled2.Parser
+import org.parboiled2.Rule1
+import org.parboiled2._
 
-/**
- * Parser for Java Descriptors as defined in Section 4.3 of
- * http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html
- */
-object DescriptorParser extends ParboiledParser[Descriptor] {
-  private val TypeParser = local(ReportingParseRunner(Type))
+import scala.annotation.switch
+import scala.util.{ Failure, Success }
 
-  def parseType(desc: String): DescriptorType = {
-    val parsingResult = TypeParser.get.run(desc)
-    parsingResult.result.getOrElse {
-      throw new ParsingException(
-        "Invalid :\n" + ErrorUtils.printParseErrors(parsingResult)
-      )
+object DescriptorParser {
+  def parse(desc: String): Descriptor = {
+    val parser = new DescriptorParser(desc)
+    parser.Desc.run() match {
+      case Success(d) => d
+      case Failure(error: ParseError) =>
+        val msg = parser.formatError(error, new ErrorFormatter(showTraces = true))
+        throw new Exception(s"Failed to parse descriptor: $msg")
+      case Failure(other) =>
+        throw new Exception("Failed to parse descriptor: ", other)
     }
   }
 
-  protected val Top: Rule1[Descriptor] = rule("Top") {
-    "(" ~ zeroOrMore(Type) ~ ")" ~ Type
-  } ~~> { (params, ret) => Descriptor(params, ret) }
+  def parseType(desc: String): DescriptorType = {
+    val parser = new DescriptorParser(desc)
+    parser.Type.run() match {
+      case Success(d) => d
+      case Failure(error: ParseError) =>
+        val msg = parser.formatError(error, new ErrorFormatter(showTraces = true))
+        throw new Exception(s"Failed to parse descriptor type: $msg")
+      case Failure(other) =>
+        throw new Exception("Failed to parse descriptor type: ", other)
+    }
+  }
+  val PackageNamePredicate = CharPredicate.All -- ";/ "
+  val ClassNameCharPredicate = CharPredicate.All -- ";/ "
+}
 
-  private lazy val Type: Rule1[DescriptorType] = rule("Type") {
-    Class | Primitive | Array
+class DescriptorParser(val input: ParserInput) extends Parser {
+  import ClassName._
+
+  def Desc: Rule1[Descriptor] = rule {
+    '(' ~ zeroOrMore(Type) ~ ')' ~ Type ~ EOI ~> {
+      (paramSeq: Seq[DescriptorType], retType: DescriptorType) => Descriptor(paramSeq.toList, retType)
+    }
   }
 
-  private lazy val Array: Rule1[DescriptorType] = rule("Array") {
-    ch('[') ~ (Class | Primitive | Array)
-  } ~~> { c => ArrayDescriptor(c) }
-
-  private lazy val Class: Rule1[DescriptorType] = rule("Class") {
-    "L" ~ Package ~ Name ~ ";"
-  } ~~> { (p, n) => ClassName(p, n) }
-
-  private lazy val Package: Rule1[PackageName] = rule("Package") {
-    zeroOrMore(oneOrMore("a" - "z" | "A" - "Z" | "_" | "-" | "0" - "9").save ~ "/")
-  } ~~> { PackageName.apply }
-
-  private lazy val Name: Rule1[String] = rule("Name") {
-    oneOrMore(noneOf(";/()"))
-  } save
-
-  private lazy val Primitive: Rule1[DescriptorType] = rule("Primitive") {
-    Boolean | Byte | Char | Short | Int | Long | Float | Double | Void
+  def Type: Rule1[DescriptorType] = rule {
+    // based on the example in the JSON Parser from Parboiled2 doing a one character lookahead here
+    // all descriptor types can be inferred from the first character
+    run {
+      (cursorChar: @switch) match {
+        case 'L' => Class
+        case 'Z' => Boolean
+        case 'B' => Byte
+        case 'C' => Char
+        case 'S' => Short
+        case 'I' => Int
+        case 'J' => Long
+        case 'F' => Float
+        case 'D' => Double
+        case 'V' => Void
+        case '[' => Array
+        case _ => MISMATCH
+      }
+    }
   }
 
-  private lazy val Boolean: Rule1[ClassName] = rule { ch('Z') as PrimitiveBoolean }
-  private lazy val Byte: Rule1[ClassName] = rule { ch('B') as PrimitiveByte }
-  private lazy val Char: Rule1[ClassName] = rule { ch('C') as PrimitiveChar }
-  private lazy val Short: Rule1[ClassName] = rule { ch('S') as PrimitiveShort }
-  private lazy val Int: Rule1[ClassName] = rule { ch('I') as PrimitiveInt }
-  private lazy val Long: Rule1[ClassName] = rule { ch('J') as PrimitiveLong }
-  private lazy val Float: Rule1[ClassName] = rule { ch('F') as PrimitiveFloat }
-  private lazy val Double: Rule1[ClassName] = rule { ch('D') as PrimitiveDouble }
-  private lazy val Void: Rule1[ClassName] = rule { ch('V') as PrimitiveVoid }
+  private def Class: Rule1[DescriptorType] = rule {
+    'L' ~ Package ~ Name ~ ';' ~> ClassName.apply _
+  }
 
+  private def Name: Rule1[String] = rule {
+    capture(oneOrMore(DescriptorParser.ClassNameCharPredicate))
+  }
+
+  private def Package: Rule1[PackageName] = rule {
+    zeroOrMore(capture(oneOrMore(DescriptorParser.PackageNamePredicate)) ~ '/') ~> { seq: Seq[String] => PackageName(seq.toList) }
+  }
+
+  private def Array: Rule1[DescriptorType] = rule {
+    '[' ~ Type ~> { c => ArrayDescriptor(c) }
+  }
+
+  private def Boolean: Rule1[ClassName] = rule { 'Z' ~ push(PrimitiveBoolean) }
+  private def Byte: Rule1[ClassName] = rule { 'B' ~ push(PrimitiveByte) }
+  private def Char: Rule1[ClassName] = rule { 'C' ~ push(PrimitiveChar) }
+  private def Short: Rule1[ClassName] = rule { 'S' ~ push(PrimitiveShort) }
+  private def Int: Rule1[ClassName] = rule { 'I' ~ push(PrimitiveInt) }
+  private def Long: Rule1[ClassName] = rule { 'J' ~ push(PrimitiveLong) }
+  private def Float: Rule1[ClassName] = rule { 'F' ~ push(PrimitiveFloat) }
+  private def Double: Rule1[ClassName] = rule { 'D' ~ push(PrimitiveDouble) }
+  private def Void: Rule1[ClassName] = rule { 'V' ~ push(PrimitiveVoid) }
 }

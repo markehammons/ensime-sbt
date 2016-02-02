@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.fixture
 
 import org.scalatest._
@@ -9,6 +11,7 @@ import org.ensime.core._
 
 import scala.collection.immutable.ListMap
 import scala.concurrent.Await
+import scala.concurrent.duration._
 
 object ProjectFixture extends Matchers {
   private[fixture] def startup(
@@ -33,12 +36,12 @@ object ProjectFixture extends Matchers {
     expectMsg(ConnectionInfo())
 
     if (config.scalaLibrary.isEmpty)
-      probe.receiveN(2) should contain only (
+      probe.receiveN(2, 2.minutes.dilated) should contain only (
         Broadcaster.Persist(AnalyzerReadyEvent),
         Broadcaster.Persist(IndexerReadyEvent)
       )
     else
-      probe.receiveN(3) should contain only (
+      probe.receiveN(3, 2.minutes.dilated) should contain only (
         Broadcaster.Persist(AnalyzerReadyEvent),
         Broadcaster.Persist(FullTypeCheckCompleteEvent),
         Broadcaster.Persist(IndexerReadyEvent)

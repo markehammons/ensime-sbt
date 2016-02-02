@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.apache.org/licenses/LICENSE-2.0
 package org.ensime.api
 
 import java.io.File
@@ -12,13 +14,12 @@ trait EnsimeTestData {
     }
   }
 
-  val typeInfo = new BasicTypeInfo("type1", 7, DeclaredAs.Method, "FOO.type1", List(), List(), None, Some(8))
+  val typeInfo = new BasicTypeInfo("type1", DeclaredAs.Method, "FOO.type1", List(), List(), None)
 
   val interfaceInfo = new InterfaceInfo(typeInfo, Some("DEF"))
-  val typeInspectInfo = new TypeInspectInfo(typeInfo, Some(1), List(interfaceInfo))
+  val typeInspectInfo = new TypeInspectInfo(typeInfo, List(interfaceInfo))
 
   val paramSectionInfo = new ParamSectionInfo(List(("ABC", typeInfo)), false)
-  val callCompletionInfo = new CallCompletionInfo(typeInfo, List(paramSectionInfo))
 
   val symFile = canon("/abc")
   val symbolDesignations = SymbolDesignations(
@@ -29,7 +30,7 @@ trait EnsimeTestData {
     )
   )
 
-  val symbolInfo = new SymbolInfo("name", "localName", None, typeInfo, false, Some(2))
+  val symbolInfo = new SymbolInfo("name", "localName", None, typeInfo, false)
 
   val implicitInfos = List(
     ImplicitConversionInfo(5, 6, symbolInfo),
@@ -44,9 +45,9 @@ trait EnsimeTestData {
 
   val packageInfo = new PackageInfo("name", "fullName", List())
 
-  val completionInfo = new CompletionInfo("name", new CompletionSignature(List(List(("abc", "def"), ("hij", "lmn"))), "ABC"), 88, false, 90, Some("BAZ"))
+  val completionInfo = new CompletionInfo("name", new CompletionSignature(List(List(("abc", "def"), ("hij", "lmn"))), "ABC", false), false, 90, Some("BAZ"))
 
-  val completionInfo2 = new CompletionInfo("name2", new CompletionSignature(List(List(("abc", "def"))), "ABC"), 90, true, 91, None)
+  val completionInfo2 = new CompletionInfo("name2", new CompletionSignature(List(List(("abc", "def"))), "ABC", false), true, 91, None)
 
   val completionInfoList = List(completionInfo, completionInfo2)
 
@@ -60,6 +61,7 @@ trait EnsimeTestData {
 
   val refactorEffect = new RefactorEffect(9, RefactorType.AddImport, List(TextEdit(file3, 5, 7, "aaa")))
   val refactorResult = new RefactorResult(7, RefactorType.AddImport, List(file3, file1))
+  val refactorDiffEffect = new RefactorDiffEffect(9, RefactorType.AddImport, file2)
 
   val sourcePos1 = new LineSourcePosition(file1, 57)
   val sourcePos2 = new LineSourcePosition(file1, 59)
@@ -113,9 +115,31 @@ trait EnsimeTestData {
 
   val noteList = NewScalaNotesEvent(isFull = true, List(note1, note2))
 
-  val entityInfo: TypeInfo = new ArrowTypeInfo("Arrow1", 8, typeInfo, List(paramSectionInfo))
+  val entityInfo: TypeInfo = new ArrowTypeInfo("Arrow1", typeInfo, List(paramSectionInfo))
 
   val sourceFileInfo = SourceFileInfo(file1, Some("{/* code here */}"), Some(file2))
   val dtid = DebugThreadId(13)
   val debugLocationArray = DebugArrayElement(DebugObjectId(13), 14)
+
+  val structureView = StructureView(List(
+    StructureViewMember(
+      keyword = "class",
+      name = "StructureView",
+      position = sourcePos1,
+      members = Nil
+    ),
+    StructureViewMember(
+      keyword = "object",
+      name = "StructureView",
+      position = sourcePos2,
+      members = List(
+        StructureViewMember(
+          keyword = "type",
+          name = "BasicType",
+          position = sourcePos4,
+          members = Nil
+        )
+      )
+    )
+  ))
 }

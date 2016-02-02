@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.indexer
 
 import com.google.common.io.ByteStreams
@@ -7,10 +9,10 @@ import scala.tools.scalap.scalax.rules.scalasig._
 
 class ClassfileDepickler(file: FileObject) {
 
-  val scalasig = depickle(file)
+  val scalasig: Option[ScalaSig] = depickle
 
   /** Uses scalap to produce a scala reflective view of the classfile */
-  private def depickle(file: FileObject): Option[ScalaSig] = {
+  private def depickle: Option[ScalaSig] = {
     val in = file.getContent.getInputStream
     try {
       val bytes = ByteStreams.toByteArray(in)
@@ -26,10 +28,10 @@ class ClassfileDepickler(file: FileObject) {
   def getTypeAliases: Seq[RawType] = {
     scalasig match {
       case Some(sig: ScalaSig) =>
-        sig.symbols.map {
+        sig.symbols.flatMap {
           case s: AliasSymbol => Some(RawType(symbolName(s), access(s)))
           case _ => None
-        }.flatten
+        }
       case None => Nil
     }
   }

@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.core
 
 import akka.actor._
@@ -43,11 +45,12 @@ class Project(
   private val resolver = new SourceResolver(config)
   private val searchService = new SearchService(config, resolver)
   private val sourceWatcher = new SourceWatcher(config, resolver :: Nil)
-  private val reTypecheck = new ClassfileListener {
+  private val reTypecheck = new FileChangeListener {
     def reTypeCheck(): Unit = self ! AskReTypecheck
-    def classfileAdded(f: FileObject): Unit = reTypeCheck()
-    def classfileChanged(f: FileObject): Unit = reTypeCheck()
-    def classfileRemoved(f: FileObject): Unit = reTypeCheck()
+    def fileAdded(f: FileObject): Unit = reTypeCheck()
+    def fileChanged(f: FileObject): Unit = reTypeCheck()
+    def fileRemoved(f: FileObject): Unit = reTypeCheck()
+    override def baseReCreated(f: FileObject): Unit = reTypeCheck()
   }
   private val classfileWatcher = new ClassfileWatcher(config, searchService :: reTypecheck :: Nil)
 
@@ -90,11 +93,11 @@ class Project(
       }))
 
       scalac = context.actorOf(Analyzer(merger, indexer, searchService), "scalac")
-      javac = context.actorOf(JavaAnalyzer(merger), "javac")
+      javac = context.actorOf(JavaAnalyzer(merger, indexer, searchService), "javac")
     } else {
       log.warning("Detected a pure Java project. Scala queries are not available.")
       scalac = system.deadLetters
-      javac = context.actorOf(JavaAnalyzer(broadcaster), "javac")
+      javac = context.actorOf(JavaAnalyzer(broadcaster, indexer, searchService), "javac")
     }
     debugger = context.actorOf(DebugManager(broadcaster), "debugging")
     docs = context.actorOf(DocResolver(), "docs")
@@ -123,6 +126,7 @@ class Project(
     case m @ DocUriAtPointReq(sfi, _) if sfi.file.isJava => javac forward m
     case m @ TypeAtPointReq(sfi, _) if sfi.file.isJava => javac forward m
     case m @ SymbolDesignationsReq(sfi, _, _, _) if sfi.file.isJava => javac forward m
+    case m @ SymbolAtPointReq(sfi, _) if sfi.file.isJava => javac forward m
 
     // mixed mode query
     case TypecheckFilesReq(files) =>
@@ -134,6 +138,10 @@ class Project(
     case m: RpcDebuggerRequest => debugger forward m
     case m: RpcSearchRequest => indexer forward m
     case m: DocSigPair => docs forward m
+
+    // added here to prevent errors when client sends this repeatedly (e.g. as a keepalive
+    case ConnectionInfoReq =>
+      sender() ! ConnectionInfo()
   }
 
 }

@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.util
 
 import java.io._
@@ -77,6 +79,30 @@ object FileUtils {
           file
         }
       )
+    } catch {
+      case e: Exception => Left(e)
+    }
+  }
+
+  def writeDiffChanges(changes: List[FileEdit], cs: Charset): Either[Exception, File] = {
+    //TODO: add support for NewFile and DeleteFile
+    val editsByFile = changes.collect { case ed: TextEdit => ed }.groupBy(_.file)
+    try {
+      val diffContents =
+        editsByFile.map {
+          case (file, fileChanges) =>
+            readFile(file, cs) match {
+              case Right(contents) =>
+                FileEditHelper.diffFromTextEdits(fileChanges, contents, file, file)
+              case Left(e) => throw e
+            }
+        }.mkString("\n")
+
+      Right({
+        val diffFile = java.io.File.createTempFile("ensime-diff-", ".tmp").canon
+        diffFile.writeString(diffContents)
+        diffFile
+      })
     } catch {
       case e: Exception => Left(e)
     }

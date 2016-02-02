@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.apache.org/licenses/LICENSE-2.0
 package org.ensime.api
 
 import java.io.File
@@ -141,16 +143,6 @@ case class PackageMemberCompletionReq(
 ) extends RpcAnalyserRequest
 
 /**
- * Responds with `CallCompletionInfo` if valid, or `FalseResponse`.
- */
-case class CallCompletionReq(id: Int) extends RpcAnalyserRequest
-
-/**
- * Responds with `TypeInfo` if valid, or `FalseResponse`.
- */
-case class TypeByIdReq(id: Int) extends RpcAnalyserRequest
-
-/**
  * Responds with `TypeInfo` if valid, or `FalseResponse`.
  */
 case class TypeByNameReq(name: String) extends RpcAnalyserRequest
@@ -180,15 +172,6 @@ case class TypeAtPointReq(
  * @param range in the file to inspect.
  */
 case class InspectTypeAtPointReq(file: Either[File, SourceFileInfo], range: OffsetRange) extends RpcAnalyserRequest
-
-/**
- * Request detailed type description by `typeId`.
- *
- * Responds with a `TypeInspectInfo` if the id is valid, or `FalseResponse`.
- *
- * @param id of the type to inspect (returned by other calls).
- */
-case class InspectTypeByIdReq(id: Int) extends RpcAnalyserRequest
 
 /**
  * Request detailed type description by fully qualified class name.
@@ -236,6 +219,15 @@ case class PrepareRefactorReq(
 ) extends RpcAnalyserRequest
 
 /**
+ * Responds with a `RefactorFailure` or a `RefactorDiffEffect`.
+ */
+case class RefactorReq(
+  procId: Int,
+  params: RefactorDesc,
+  interactive: Boolean
+) extends RpcAnalyserRequest
+
+/**
  * Responds with a `RefactorFailure` or a `RefactorEffect`.
  */
 case class ExecRefactorReq(procId: Int, tpe: RefactorType) extends RpcAnalyserRequest
@@ -267,6 +259,11 @@ case class SymbolDesignationsReq(
  * Responds with a `FileRange`.
  */
 case class ExpandSelectionReq(file: File, start: Int, end: Int) extends RpcAnalyserRequest
+
+/**
+ * Responds with a `StructureView`.
+ */
+case class StructureViewReq(fileInfo: SourceFileInfo) extends RpcAnalyserRequest
 
 sealed trait RpcDebuggerRequest extends RpcRequest
 
