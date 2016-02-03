@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.core
 
 import java.io.File
@@ -30,7 +32,7 @@ class RichPresentationCompilerThatNeedsJavaLibsSpec extends WordSpec with Matche
       import ReallyRichPresentationCompilerFixture._
 
       cc.search.refreshResolver()
-      Await.result(cc.search.refresh(), 180.seconds)
+      Await.result(cc.search.refresh(), Duration.Inf)
 
       runForPositionInCompiledSource(config, cc,
         "package com.example",
@@ -111,7 +113,7 @@ class RichPresentationCompilerSpec extends WordSpec with Matchers
       import ReallyRichPresentationCompilerFixture._
 
       cc.search.refreshResolver()
-      Await.result(cc.search.refresh(), 180.seconds)
+      Await.result(cc.search.refresh(), Duration.Inf)
 
       runForPositionInCompiledSource(config, cc,
         "package com.example",
@@ -121,6 +123,68 @@ class RichPresentationCompilerSpec extends WordSpec with Matchers
           assert(sym.declPos.get match {
             case OffsetSourcePosition(f, i) =>
               f.parts.contains("Int.scala") && i > 0
+            case _ => false
+          })
+        }
+    }
+
+    "jump to function definition instead of Function1.apply" in withPresCompiler { (config, cc) =>
+      import ReallyRichPresentationCompilerFixture._
+      runForPositionInCompiledSource(config, cc,
+        "package com.example",
+        "object Bla { val fn: String => Int = str => str.lenght }",
+        "object Abc { def main { Bla.f@@n(\"bal\" } }") { (p, label, cc) =>
+          val sym = cc.askSymbolInfoAt(p).get
+          assert(sym.name == "fn")
+          assert(sym.localName == "fn")
+          assert(sym.declPos.isDefined)
+          assert(sym.declPos.get match {
+            case OffsetSourcePosition(f, i) => i > 0
+            case _ => false
+          })
+        }
+    }
+
+    "jump to case class definition when symbol under cursor is name of case class field" in withPresCompiler { (config, cc) =>
+      import ReallyRichPresentationCompilerFixture._
+      runForPositionInCompiledSource(config, cc,
+        "package com.example",
+        "case class Foo(bar: String, baz: Int)",
+        "object Bla {",
+        "  val foo = Foo(",
+        "    b@@ar = \"Bar\",",
+        "    baz = 123",
+        "  )",
+        "}") { (p, label, cc) =>
+          val sym = cc.askSymbolInfoAt(p).get
+          assert(sym.name == "apply")
+          assert(sym.localName == "apply")
+          assert(sym.declPos.isDefined)
+          assert(sym.declPos.get match {
+            case OffsetSourcePosition(f, i) => i > 0
+            case _ => false
+          })
+        }
+    }
+
+    "jump to case class definition when symbol under cursor is name of case class field in copy method" in withPresCompiler { (config, cc) =>
+      import ReallyRichPresentationCompilerFixture._
+      runForPositionInCompiledSource(config, cc,
+        "package com.example",
+        "case class Foo(bar: String, baz: Int)",
+        "object Bla {",
+        "  val foo = Foo(",
+        "    bar = \"Bar\",",
+        "    baz = 123",
+        "  )",
+        " val fooUpd = foo.copy(b@@ar = foo.bar.reverse)",
+        "}") { (p, label, cc) =>
+          val sym = cc.askSymbolInfoAt(p).get
+          assert(sym.name == "copy")
+          assert(sym.localName == "copy")
+          assert(sym.declPos.isDefined)
+          assert(sym.declPos.get match {
+            case OffsetSourcePosition(f, i) => i > 0
             case _ => false
           })
         }
@@ -476,7 +540,7 @@ class RichPresentationCompilerSpec extends WordSpec with Matchers
       )
 
       cc.search.refreshResolver()
-      Await.result(cc.search.refresh(), 180.seconds)
+      Await.result(cc.search.refresh(), Duration.Inf)
 
       val scalaVersion = scala.util.Properties.versionNumberString
       val parts = scalaVersion.split("\\.").map { _.toInt }

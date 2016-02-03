@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.model
 
 import org.ensime.api._
@@ -15,29 +17,6 @@ import scala.tools.nsc.io.AbstractFile
 trait ModelBuilders { self: RichPresentationCompiler =>
 
   import rootMirror.RootPackage
-
-  private val typeCache = new mutable.HashMap[Int, Type]
-  private val typeCacheReverse = new mutable.HashMap[Type, Int]
-
-  def clearTypeCache(): Unit = {
-    typeCache.clear()
-    typeCacheReverse.clear()
-  }
-
-  def typeById(id: Int): Option[Type] = {
-    typeCache.get(id)
-  }
-
-  def cacheType(tpe: Type): Int = {
-    if (typeCacheReverse.contains(tpe)) {
-      typeCacheReverse(tpe)
-    } else {
-      val id = typeCache.size + 1
-      typeCache(id) = tpe
-      typeCacheReverse(tpe) = id
-      id
-    }
-  }
 
   def locateSymbolPos(sym: Symbol, needPos: PosNeeded): Option[SourcePosition] = {
     _locateSymbolPos(sym, needPos).orElse({
@@ -207,16 +186,13 @@ trait ModelBuilders { self: RichPresentationCompiler =>
         val typeSym = tpe.typeSymbol
         val symbolToLocate = if (typeSym.isModuleClass) typeSym.sourceModule else typeSym
         val symPos = locateSymbolPos(symbolToLocate, needPos)
-        val outerTypeId = outerClass(typeSym).map(s => cacheType(s.tpe))
         new BasicTypeInfo(
           typeShortName(tpe),
-          cacheType(tpe),
           declaredAs(typeSym),
           typeFullName(tpe),
           tpe.typeArgs.map(TypeInfo(_)),
           members,
-          symPos,
-          outerTypeId
+          symPos
         )
       }
       tpe match {
@@ -229,7 +205,7 @@ trait ModelBuilders { self: RichPresentationCompiler =>
     }
 
     def nullInfo = {
-      new BasicTypeInfo("NA", -1, DeclaredAs.Nil, "NA", List.empty, List.empty, None, None)
+      new BasicTypeInfo("NA", DeclaredAs.Nil, "NA", List.empty, List.empty, None)
     }
   }
 
@@ -239,28 +215,6 @@ trait ModelBuilders { self: RichPresentationCompiler =>
         params.map { s => (s.nameString, TypeInfo(s.tpe)) },
         params.exists(_.isImplicit)
       )
-    }
-  }
-
-  object CallCompletionInfo {
-
-    def apply(tpe: Type): CallCompletionInfo = {
-      tpe match {
-        case tpe: MethodType => apply(tpe.paramss.map(ParamSectionInfo.apply), tpe.finalResultType)
-        case tpe: PolyType => apply(tpe.paramss.map(ParamSectionInfo.apply), tpe.finalResultType)
-        case _ => nullInfo()
-      }
-    }
-
-    def apply(paramSections: List[ParamSectionInfo], finalResultType: Type): CallCompletionInfo = {
-      new CallCompletionInfo(
-        TypeInfo(finalResultType),
-        paramSections
-      )
-    }
-
-    def nullInfo() = {
-      new CallCompletionInfo(TypeInfo.nullInfo, List.empty)
     }
   }
 
@@ -286,8 +240,7 @@ trait ModelBuilders { self: RichPresentationCompiler =>
         localName,
         locateSymbolPos(sym, PosNeededYes),
         TypeInfo(tpe, PosNeededAvail),
-        isArrowType(tpe),
-        ownerTpe.map(cacheType)
+        isArrowType(tpe)
       )
     }
   }
@@ -297,12 +250,11 @@ trait ModelBuilders { self: RichPresentationCompiler =>
     def apply(
       name: String,
       tpeSig: CompletionSignature,
-      tpeId: Int,
       isCallable: Boolean,
       relevance: Int,
       toInsert: Option[String]
     ) = new CompletionInfo(
-      name, tpeSig, tpeId, isCallable, relevance, toInsert
+      name, tpeSig, isCallable, relevance, toInsert
     )
 
     def fromSymbol(sym: Symbol, relevance: Int): CompletionInfo =
@@ -312,7 +264,6 @@ trait ModelBuilders { self: RichPresentationCompiler =>
       CompletionInfo(
         sym.nameString,
         completionSignatureForType(tpe),
-        cacheType(tpe.underlying),
         isArrowType(tpe.underlying),
         relevance,
         None
@@ -343,14 +294,13 @@ trait ModelBuilders { self: RichPresentationCompiler =>
     def apply(tpe: Type, paramSections: List[ParamSectionInfo], finalResultType: Type): ArrowTypeInfo = {
       new ArrowTypeInfo(
         tpe.toString(),
-        cacheType(tpe),
         TypeInfo(tpe.finalResultType),
         paramSections
       )
     }
 
     def nullInfo() = {
-      new ArrowTypeInfo("NA", -1, TypeInfo.nullInfo, List.empty)
+      new ArrowTypeInfo("NA", TypeInfo.nullInfo, List.empty)
     }
   }
 }

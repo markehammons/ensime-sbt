@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.core
 
 import java.io.{ File => JFile }
@@ -27,6 +29,7 @@ case class DocFqn(pack: String, typeName: String) {
   def mkString: String = if (pack.isEmpty) typeName else pack + "." + typeName
   def inPackage(prefix: String): Boolean = pack == prefix || pack.startsWith(prefix + ".")
   def javaStdLib: Boolean = inPackage("java") || inPackage("javax")
+  def androidStdLib: Boolean = inPackage("android")
   def scalaStdLib: Boolean = inPackage("scala")
 }
 case class DocSig(fqn: DocFqn, member: Option[String])
@@ -109,7 +112,6 @@ class Analyzer(
   }
 
   override def postStop(): Unit = {
-    Try(scalaCompiler.askClearTypeCache())
     Try(scalaCompiler.askShutdown())
   }
 
@@ -181,7 +183,9 @@ class Analyzer(
       sender ! handleRefactorExec(req)
     case req: CancelRefactorReq =>
       sender ! handleRefactorCancel(req)
-    case CompletionsReq(fileInfo, point, maxResults, caseSens, reload) =>
+    case req: RefactorReq =>
+      sender ! handleRefactorRequest(req)
+    case CompletionsReq(fileInfo, point, maxResults, caseSens, _reload) =>
       reporter.disable()
       sender ! scalaCompiler.askCompletionsAt(pos(fileInfo, point), maxResults, caseSens)
     case UsesOfSymbolAtPointReq(file, point) =>
@@ -196,8 +200,6 @@ class Analyzer(
       val p = pos(file, range)
       scalaCompiler.askLoadedTyped(p.source)
       sender ! scalaCompiler.askInspectTypeAt(p)
-    case InspectTypeByIdReq(id: Int) =>
-      sender ! scalaCompiler.askInspectTypeById(id)
     case InspectTypeByNameReq(name: String) =>
       sender ! scalaCompiler.askInspectTypeByName(name)
     case SymbolAtPointReq(file, point: Int) =>
@@ -218,17 +220,12 @@ class Analyzer(
       val p = pos(file, range)
       scalaCompiler.askLoadedTyped(p.source)
       sender ! scalaCompiler.askTypeInfoAt(p)
-    case TypeByIdReq(id: Int) =>
-      sender ! scalaCompiler.askTypeInfoById(id)
     case TypeByNameReq(name: String) =>
       sender ! scalaCompiler.askTypeInfoByName(name)
     case TypeByNameAtPointReq(name: String, file, range: OffsetRange) =>
       val p = pos(file, range)
       scalaCompiler.askLoadedTyped(p.source)
       sender ! scalaCompiler.askTypeInfoByNameAt(name, p)
-    case CallCompletionReq(id: Int) =>
-      sender ! scalaCompiler.askCallCompletionInfoById(id)
-
     case SymbolDesignationsReq(f, start, end, Nil) =>
       sender ! SymbolDesignations(f.file, List.empty)
     case SymbolDesignationsReq(f, start, end, tpes) =>
@@ -251,7 +248,9 @@ class Analyzer(
       sender ! VoidResponse
     case FormatOneSourceReq(fileInfo: SourceFileInfo) =>
       sender ! StringResponse(handleFormatFile(fileInfo))
-
+    case StructureViewReq(fileInfo: SourceFileInfo) =>
+      val sourceFile = createSourceFile(fileInfo)
+      sender ! StructureView(scalaCompiler.askStructure(sourceFile))
   }
 
   def handleReloadFiles(files: List[SourceFileInfo]): RpcResponse = {
@@ -292,8 +291,8 @@ class Analyzer(
 
   def createSourceFile(file: SourceFileInfo): SourceFile =
     scalaCompiler.createSourceFile(file)
-
 }
+
 object Analyzer {
   def apply(
     broadcaster: ActorRef,

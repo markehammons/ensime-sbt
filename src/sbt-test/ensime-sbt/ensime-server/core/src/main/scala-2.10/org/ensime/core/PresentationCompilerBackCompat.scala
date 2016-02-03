@@ -1,4 +1,4 @@
-// Copyright (C) 2015 ENSIME Authors
+// Copyright 2010 - 2015 https://github.com/ensime/ensime-server/graphs/
 // License: GPL 3.0
 package org.ensime.core
 

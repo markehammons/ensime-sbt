@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.apache.org/licenses/LICENSE-2.0
 package org.ensime.api
 
 import java.io.File
@@ -32,7 +34,8 @@ case class EnsimeConfig(
   /* Proposed alternatives to the legacy wire format field names */
   def root = rootDir
   def debugVMArgs = debugArgs
-  def referenceSourceJars = referenceSourceRoots
+  val referenceSourceJars =
+    (referenceSourceRoots ++ subprojects.flatMap(_.referenceSourceRoots)).toSet
 
   // some marshalling libs (e.g. spray-json) might not like extra vals
   val modules = subprojects.map { module => (module.name, module) }.toMap
@@ -87,7 +90,7 @@ case class EnsimeModule(
   def testJars = testDeps
   def referenceSourceJars = referenceSourceRoots
 
-  // prefer these to the raw target(s)
+  // prefer these to the raw target(s) until we deprecate `target`
   val targetDirs = targets ++ target.toIterable
   val testTargetDirs = testTargets ++ testTarget.toIterable
 
@@ -95,4 +98,3 @@ case class EnsimeModule(
     dependsOnModules.map(config.modules)
 
 }
-

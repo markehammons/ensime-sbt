@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.intg
 
 import akka.event.slf4j.SLF4JLogging
@@ -30,7 +32,7 @@ class JavaWorkflow extends WordSpec with Matchers
             expectMsg(VoidResponse)
 
             project ! TypeAtPointReq(Left(fooFile), OffsetRange(30))
-            expectMsg(Some(BasicTypeInfo("pure.NoScalaHere", -1, DeclaredAs.Class, "pure.NoScalaHere", Nil, Nil, Some(EmptySourcePosition()), None)))
+            expectMsg(Some(BasicTypeInfo("pure.NoScalaHere", DeclaredAs.Class, "pure.NoScalaHere", Nil, Nil, Some(EmptySourcePosition()))))
           }
         }
       }

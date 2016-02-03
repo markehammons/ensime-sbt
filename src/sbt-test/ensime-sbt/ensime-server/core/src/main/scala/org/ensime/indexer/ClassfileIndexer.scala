@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.indexer
 
 import akka.event.slf4j.SLF4JLogging
@@ -200,12 +202,12 @@ trait ClassfileIndexer {
       opcode: Int, owner: String, name: String, desc: String, itf: Boolean
     ): Unit = {
       internalRefs :+= memberOrInit(owner, name)
-      internalRefs ++= classesInDescriptor(desc)
+      internalRefs = internalRefs.enqueue(classesInDescriptor(desc))
     }
 
     override def visitInvokeDynamicInsn(name: String, desc: String, bsm: Handle, bsmArgs: AnyRef*): Unit = {
       internalRefs :+= memberOrInit(bsm.getOwner, bsm.getName)
-      internalRefs ++= classesInDescriptor(bsm.getDesc)
+      internalRefs = internalRefs.enqueue(classesInDescriptor(bsm.getDesc))
     }
 
     private val annVisitor: AnnotationVisitor = new AnnotationVisitor(ASM5) {
@@ -236,4 +238,3 @@ trait ClassfileIndexer {
     ) = handleAnn(desc)
   }
 }
-

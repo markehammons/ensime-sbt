@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.indexer
 
 import org.ensime.fixture._
@@ -15,7 +17,7 @@ class SearchServiceSpec extends WordSpec with Matchers
   def original = EnsimeConfigFixture.SimpleTestProject
 
   "search refreshing" should {
-    "parse all files on a prestine structure" in withSearchService { implicit service =>
+    "parse all files on a pristine structure" in withSearchService { implicit service =>
       val (deleted, indexed) = refresh()
       deleted shouldBe 0
       indexed should be > 0

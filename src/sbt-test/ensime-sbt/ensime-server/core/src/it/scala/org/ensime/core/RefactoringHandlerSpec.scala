@@ -1,6 +1,10 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.core
 
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
 import org.scalatest._
 
 import org.ensime.api._
@@ -243,5 +247,86 @@ class RefactoringHandlerSpec extends WordSpec with Matchers
       assert(formatted === expectedContents)
     }
 
+    "rename a function id with params' opening/closing parenthesis on different lines" ignore withAnalyzer { (dir, analyzerRef) =>
+
+      val file = srcFile(dir, "tmp-contents", contents(
+        "package org.ensime.testing",
+        "trait Foo {",
+        "def doIt(",
+        ") = \"\"",
+        "}",
+        ""
+      ), write = true, encoding = encoding)
+
+      val analyzer = analyzerRef.underlyingActor
+
+      val procId = 1
+      analyzer.handleRefactorPrepareRequest(
+        new PrepareRefactorReq(
+          procId, 'rename, RenameRefactorDesc("doItNow", new File(file.path), 43, 47), false
+        )
+      )
+      analyzer.handleRefactorExec(
+        new ExecRefactorReq(procId, RefactorType.Rename)
+      )
+      val formatted = readSrcFile(file, encoding)
+      val expectedContents = contents(
+        "package org.ensime.testing",
+        "trait Foo {",
+        "def doItNow(",
+        ") = \"\"",
+        "}",
+        ""
+      )
+      assert(formatted === expectedContents)
+    }
   }
+
+  "RefactoringHandler" should {
+    "produce a diff file in the unified output format" when {
+      "organize imports when 3 imports exist" in withAnalyzer { (dir, analyzerRef) =>
+        import org.ensime.util.file._
+        val file = srcFile(dir, "tmp-contents", contents(
+          "import java.lang.Integer.{valueOf => vo}",
+          "import java.lang.Integer.toBinaryString",
+          "import java.lang.String.valueOf",
+          " ",
+          "trait Temp {",
+          "  valueOf(5)",
+          "  vo(\"5\")",
+          "  toBinaryString(27)",
+          "}"
+        ), write = true, encoding = encoding)
+
+        val analyzer = analyzerRef.underlyingActor
+
+        val procId = 1
+        val result = analyzer.handleRefactorRequest(
+          new RefactorReq(
+            procId, OrganiseImportsRefactorDesc(new File(file.path)), false
+          )
+        )
+        val diffFile = result match {
+          case RefactorDiffEffect(_, _, f) => f.canon
+          case _ => fail()
+        }
+
+        val sdf = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss Z")
+        val t = sdf.format(new Date((new File(file.path)).lastModified()))
+        val diffContents = diffFile.readString()
+        val expectedContents = s"""|--- ${file.path}	${t}
+                                   |+++ ${file.path}	${t}
+                                   |@@ -1,3 +1,2 @@
+                                   |-import java.lang.Integer.{valueOf => vo}
+                                   |-import java.lang.Integer.toBinaryString
+                                   |+import java.lang.Integer.{toBinaryString, valueOf => vo}
+                                   | import java.lang.String.valueOf
+                                   |""".stripMargin
+
+        assert(diffContents === expectedContents)
+        diffFile.delete()
+      }
+    }
+  }
+
 }

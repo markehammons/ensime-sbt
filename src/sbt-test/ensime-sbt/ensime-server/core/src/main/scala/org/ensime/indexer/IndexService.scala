@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.indexer
 
 import java.io.{ File, FileNotFoundException }
@@ -82,14 +84,14 @@ class IndexService(path: File) {
 
   private val lucene = new SimpleLucene(path, analyzers)
 
-  def persist(check: FileCheck, symbols: List[FqnSymbol]): Unit = {
+  def persist(check: FileCheck, symbols: List[FqnSymbol], commit: Boolean): Unit = {
     val f = Some(check)
     val fqns: List[Document] = symbols.map {
       case FqnSymbol(_, _, _, fqn, Some(_), _, _, _, _) => MethodIndex(fqn, f).toDocument
       case FqnSymbol(_, _, _, fqn, _, Some(_), _, _, _) => FieldIndex(fqn, f).toDocument
       case FqnSymbol(_, _, _, fqn, _, _, _, _, _) => ClassIndex(fqn, f).toDocument
     }
-    lucene.create(fqns, commit = false)
+    lucene.create(fqns, commit)
   }
 
   def commit(): Unit = {

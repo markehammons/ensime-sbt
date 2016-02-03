@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.config
 
 import java.io.File
@@ -50,7 +52,7 @@ object EnsimeConfigProtocol {
    */
   private[config] def validated(m: EnsimeModule): EnsimeModule = {
     (m.targetDirs ++ m.testTargetDirs ++ m.sourceRoots).foreach { dir =>
-      if (!dir.exists()) {
+      if (!dir.exists() && !dir.isJar) {
         log.warn(s"$dir does not exist, creating")
         dir.mkdirs()
       }

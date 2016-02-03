@@ -16,7 +16,8 @@ build:
         exit 1 ;
       fi
     - sbt ++$SCALA_VERSION test it:test
-    - if [ "${SCALA_VERSION}" = "2.11.6" ] ; then
+    - sbt ++$SCALA_VERSION publishLocal
+    - if [ "${SCALA_VERSION}" = "2.11.7" ] ; then
         git clone --depth 1 https://github.com/ensime/ensime-emacs.git ensime-emacs ;
         cd ensime-emacs ;
         cask pkg-file ;
@@ -34,7 +35,7 @@ build:
       fi
 
 # TODO https://github.com/ensime/ensime-server/issues/1091
-#    - if [ "${SCALA_VERSION}" = "2.11.6" ] ; then
+#    - if [ "${SCALA_VERSION}" = "2.11.7" ] ; then
 #        sbt ++$SCALA_VERSION clean ;
 #        sbt ++$SCALA_VERSION coverage test ;
 #        sbt ++$SCALA_VERSION coverage it:test ;
@@ -43,10 +44,8 @@ build:
 
 matrix:
   SCALA_VERSION:
-    - 2.11.6
-    - 2.10.4
-# 2.10.4 / 2.11.6 because that's what fommil uses at work :-D
-# EnsimeBuild tends to track latest stables
+    - 2.11.7
+    - 2.10.6
 
 deploy:
   dockerhub:
@@ -54,4 +53,4 @@ deploy:
     repo: ensime/ensime
     when:
       matrix:
-        SCALA_VERSION: 2.11.6
+        SCALA_VERSION: 2.11.7

@@ -1,3 +1,5 @@
+// Copyright: 2010 - 2016 https://github.com/ensime/ensime-server/graphs
+// Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 /*
  * This file contains derivative works.
  *
@@ -202,7 +204,7 @@ public final class TreeUtilities {
             
             public Void scan(Tree tree, Void p) {
                 if (tree != null) {
-                    if (sourcePositions.getStartPosition(getCurrentPath().getCompilationUnit(), tree) < pos && sourcePositions.getEndPosition(getCurrentPath().getCompilationUnit(), tree) >= pos) {
+                    if (sourcePositions.getStartPosition(getCurrentPath().getCompilationUnit(), tree) <= pos && sourcePositions.getEndPosition(getCurrentPath().getCompilationUnit(), tree) >= pos) {
                         if (tree.getKind() == Tree.Kind.ERRONEOUS) {
                             tree.accept(this, p);
                             throw new Result(getCurrentPath());
@@ -248,7 +250,7 @@ public final class TreeUtilities {
         
         TokenSequence<JavaTokenId> tokenList = tokensFor(path.getLeaf(), sourcePositions);
         tokenList.moveEnd();
-        if (tokenList.movePrevious() && tokenList.offset() < pos) {
+        if (tokenList.movePrevious() && tokenList.offset() <= pos) {
             switch (tokenList.token().id()) {
                 case GTGTGT:
                 case GTGT:
@@ -317,7 +319,7 @@ public final class TreeUtilities {
         if (stmts != null) {
             Tree tree = null;
             for (StatementTree st : stmts) {
-                if (sourcePositions.getStartPosition(root, st) < pos)
+                if (sourcePositions.getStartPosition(root, st) <= pos)
                     tree = st;
             }
             if (tree != null)
