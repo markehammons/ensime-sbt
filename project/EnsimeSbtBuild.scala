@@ -24,7 +24,7 @@ object EnsimeSbtBuild extends Build {
     )
   ) ++ sonatype("ensime", "ensime-sbt", BSD3)
 
-  lazy val root = (project in file(".")).
+  lazy val root = Project("ensime-sbt", file(".")).
     enablePlugins(SbtScalariform).
     settings(scriptedSettings).
     settings(
