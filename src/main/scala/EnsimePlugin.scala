@@ -498,11 +498,11 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     // manual
     sys.env.get("JDK_HOME"),
     sys.env.get("JAVA_HOME"),
-    // osx
-    Try("/usr/libexec/java_home".!!.trim).toOption,
     // fallback
     sys.props.get("java.home").map(new File(_).getParent),
-    sys.props.get("java.home")
+    sys.props.get("java.home"),
+    // osx
+    Try("/usr/libexec/java_home".!!.trim).toOption
   ).flatten.filter { n =>
       new File(n + "/lib/tools.jar").exists
     }.headOption.map(new File(_)).getOrElse(
