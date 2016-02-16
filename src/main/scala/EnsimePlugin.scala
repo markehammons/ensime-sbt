@@ -33,12 +33,6 @@ object Imports {
     val javaFlags = TaskKey[Seq[String]](
       "Flags to be passed to Java compiler."
     )
-    val includeSourceJars = settingKey[Boolean](
-      "Should source jars be included in the .ensime file."
-    )
-    val includeDocJars = settingKey[Boolean](
-      "Should doc jars be included in the .ensime file."
-    )
     val scalariform = settingKey[IFormattingPreferences](
       "Scalariform formatting preferences to use in ENSIME."
     )
@@ -131,8 +125,6 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
   override lazy val projectSettings = Seq(
     EnsimeKeys.unmanagedSourceArchives := Nil,
     EnsimeKeys.unmanagedJavadocArchives := Nil,
-    EnsimeKeys.includeSourceJars := true,
-    EnsimeKeys.includeDocJars := true,
 
     EnsimeKeys.useJar := false,
 
@@ -369,23 +361,16 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     def unmanagedJarsFor(config: Configuration) =
       (unmanagedJars in config).runOpt.map(_.map(_.data).toSet).getOrElse(Set())
 
-    def jarSrcsFor(config: Configuration) = if (EnsimeKeys.includeSourceJars.gimme) {
-      updateClassifiersReport.select(
-        configuration = configFilter(config),
-        artifact = artifactFilter(classifier = Artifact.SourceClassifier)
-      ).toSet ++ (EnsimeKeys.unmanagedSourceArchives in projectRef).gimme
-    } else {
-      (EnsimeKeys.unmanagedSourceArchives in projectRef).gimme
-    }
+    def jarSrcsFor(config: Configuration) = updateClassifiersReport.select(
+      configuration = configFilter(config),
+      artifact = artifactFilter(classifier = Artifact.SourceClassifier)
+    ).toSet ++ (EnsimeKeys.unmanagedSourceArchives in projectRef).gimme
 
-    def jarDocsFor(config: Configuration) = if (EnsimeKeys.includeDocJars.gimme) {
-      updateClassifiersReport.select(
-        configuration = configFilter(config),
-        artifact = artifactFilter(classifier = Artifact.DocClassifier)
-      ).toSet ++ (EnsimeKeys.unmanagedJavadocArchives in projectRef).gimme
-    } else {
-      (EnsimeKeys.unmanagedJavadocArchives in projectRef).gimme
-    }
+    def jarDocsFor(config: Configuration) = updateClassifiersReport.select(
+      configuration = configFilter(config),
+      artifact = artifactFilter(classifier = Artifact.DocClassifier)
+    ).toSet ++ (EnsimeKeys.unmanagedJavadocArchives in projectRef).gimme
+
     val sbv = scalaBinaryVersion.gimme
     val mainSources = filteredSources(sourcesFor(Compile) ++ sourcesFor(Provided) ++ sourcesFor(Optional), sbv)
     val testSources = filteredSources(testPhases.flatMap(sourcesFor), sbv)
