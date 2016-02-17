@@ -37,21 +37,26 @@ object EnsimeSbtTestSupport extends AutoPlugin with CommandSupport {
     implicit val pr = extracted.currentRef
     implicit val bs = extracted.structure
 
-    val baseDir = baseDirectory.gimme
+    val baseDir = baseDirectory.gimme.getCanonicalPath.replace(raw"\", "/")
     val log = state.log
 
     val jdkHome = javaHome.gimme.getOrElse(file(Properties.jdkHome)).getAbsolutePath
 
     val List(got, expect) = args.map { filename =>
       log.info(s"parsing ${file(filename).getCanonicalPath}")
+      log.info(s"baseDir = $baseDir")
       // not windows friendly
       IO.readLines(file(filename)).map {
         line =>
           line.
-            replace(baseDir.getCanonicalPath, "BASE_DIR").
-            replace(baseDir.getCanonicalPath.replace("/private", ""), "BASE_DIR"). // workaround for https://github.com/ensime/ensime-sbt/issues/151
-            replace(Properties.userHome + "/.ivy2/", "IVY_DIR/").
-            replace("/usr/lib/jvm/java-6-oracle", "JDK_HOME").
+            replace(raw"\\", "/").
+            replace(baseDir, "BASE_DIR").
+            replace(baseDir.replace("/private", ""), "BASE_DIR"). // workaround for https://github.com/ensime/ensime-sbt/issues/151
+            replace(Properties.userHome + "/.ivy2", "IVY_DIR").
+            replace("C:/Users/appveyor/.ivy2", "IVY_DIR").
+            replaceAll("""/usr/lib/jvm/[^/"]++""", "JDK_HOME").
+            replaceAll("""/Library/Java/JavaVirtualMachines/[^/]+/Contents/Home""", "JDK_HOME").
+            replaceAll("""C:/Program Files/Java/[^/"]++""", "JDK_HOME").
             replace(jdkHome, "JDK_HOME").
             replaceAll(raw""""-Dplugin[.]version=[.\d]++(-SNAPSHOT)?"""", "").
             replaceAll(""""-Xfatal-warnings"""", ""). // ensime-server only has these in CI
