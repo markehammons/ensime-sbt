@@ -15,18 +15,11 @@ object EnsimeSbtBuild extends Build {
   override val settings = super.settings ++ Seq(
     organization := "org.ensime",
     version := "0.3.4-SNAPSHOT",
-    scalaVersion := "2.10.6",
-    ivyLoggingLevel := UpdateLogging.Quiet,
-    scalacOptions in Compile ++= Seq(
-      "-encoding", "UTF-8", "-target:jvm-1.6", "-feature", "-deprecation",
-      "-Xfatal-warnings",
-      "-language:postfixOps", "-language:implicitConversions"
-    )
-  ) ++ sonatype("ensime", "ensime-sbt", BSD3)
+    scalaVersion := "2.10.6"
+  ) ++ sonatype("ensime", "ensime-sbt", Apache2)
 
   lazy val root = Project("ensime-sbt", file(".")).
-    enablePlugins(SbtScalariform).
-    settings(scriptedSettings).
+    settings(scriptedSettings ++ Sensible.settings).
     settings(
       name := "ensime-sbt",
       sbtPlugin := true,
