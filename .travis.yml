@@ -1,0 +1,6 @@
+language: java
+os:
+  - osx
+script:
+  - curl https://github.com/paulp/sbt-extras/blob/master/sbt -o sbt ; chmod 755 sbt
+  - ./sbt scripted
