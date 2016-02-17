@@ -22,7 +22,7 @@ object EnsimeSbtBuild extends Build {
       "-Xfatal-warnings",
       "-language:postfixOps", "-language:implicitConversions"
     )
-  ) ++ sonatype("ensime", "ensime-sbt", BSD3)
+  ) ++ sonatype("ensime", "ensime-sbt", Apache2)
 
   lazy val root = Project("ensime-sbt", file(".")).
     enablePlugins(SbtScalariform).
