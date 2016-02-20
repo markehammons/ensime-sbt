@@ -37,8 +37,8 @@ object Imports {
       "Scalariform formatting preferences to use in ENSIME."
     )
 
-    val useJar = settingKey[Boolean](
-      "Use the project's jar instead of the classes directory for indexing. " +
+    val useTarget = taskKey[Option[File]](
+      "Use a calculated jar instead of the class directory. " +
         "Note that `proj/compile` does not produce the jar, change your workflow to use `proj/packageBin`."
     )
 
@@ -126,7 +126,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     EnsimeKeys.unmanagedSourceArchives := Nil,
     EnsimeKeys.unmanagedJavadocArchives := Nil,
 
-    EnsimeKeys.useJar := false,
+    EnsimeKeys.useTarget := None,
 
     // Even though these are Global in ENSIME (until
     // https://github.com/ensime/ensime-server/issues/1152) if these
@@ -336,13 +336,11 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
         (unmanagedSourceDirectories in config).gimmeOpt.getOrElse(Set())
     }
 
-    def targetFor(config: Configuration) =
-      if (EnsimeKeys.useJar.gimme) (artifactPath in (config, packageBin)).gimme
-      else (classDirectory in config).gimme
-
-    def targetForOpt(config: Configuration) =
-      if (EnsimeKeys.useJar.gimme) (artifactPath in (config, packageBin)).gimmeOpt
-      else (classDirectory in config).gimmeOpt
+    def targetForOpt(config: Configuration): Option[File] =
+      (EnsimeKeys.useTarget in config).runOpt match {
+        case Some(Some(jar)) => Some(jar)
+        case _               => (classDirectory in config).gimmeOpt
+      }
 
     val myDoc = (artifactPath in (Compile, packageDoc)).gimmeOpt
 
@@ -374,7 +372,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     val sbv = scalaBinaryVersion.gimme
     val mainSources = filteredSources(sourcesFor(Compile) ++ sourcesFor(Provided) ++ sourcesFor(Optional), sbv)
     val testSources = filteredSources(testPhases.flatMap(sourcesFor), sbv)
-    val mainTarget = targetFor(Compile)
+    val mainTarget = targetForOpt(Compile).get
     val testTargets = testPhases.flatMap(targetForOpt).toSet
     val deps = project.dependencies.map(_.project.project).toSet
     val mainJars = jarsFor(Compile) ++ unmanagedJarsFor(Compile) ++ jarsFor(Provided) ++ jarsFor(Optional)

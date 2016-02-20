@@ -248,7 +248,8 @@ object EnsimeBuild extends Build {
 
   lazy val testingSimpleJar = Project("testingSimpleJar", file("testing/simpleJar")).settings(
     exportJars := true,
-    EnsimeKeys.useJar := true
+    EnsimeKeys.useTarget in Compile := Some((artifactPath in (Compile, packageBin)).value),
+    EnsimeKeys.useTarget in Test := Some((artifactPath in (Test, packageBin)).value)
   )
 
   lazy val testingImplicits = Project("testingImplicits", file("testing/implicits")) settings (
