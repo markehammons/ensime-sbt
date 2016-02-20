@@ -496,7 +496,7 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
     Try("/usr/libexec/java_home".!!.trim).toOption
   ).flatten.filter { n =>
       new File(n + "/lib/tools.jar").exists
-    }.headOption.map(new File(_)).getOrElse(
+    }.headOption.map(new File(_).getCanonicalFile).getOrElse(
       throw new FileNotFoundException(
         """Could not automatically find the JDK/lib/tools.jar.
       |You must explicitly set JDK_HOME or JAVA_HOME.""".stripMargin
