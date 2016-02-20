@@ -14,7 +14,7 @@ object EnsimeSbtBuild extends Build {
 
   override val settings = super.settings ++ Seq(
     organization := "org.ensime",
-    version := "0.4.0-SNAPSHOT",
+    version := "0.4.0",
     scalaVersion := "2.10.6"
   ) ++ sonatype("ensime", "ensime-sbt", Apache2)
 
