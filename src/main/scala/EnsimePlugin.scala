@@ -95,10 +95,10 @@ object EnsimePlugin extends AutoPlugin with CommandSupport {
   val EnsimeInternal = config("ensime-internal").hide
 
   override lazy val buildSettings = Seq(
-    commands += Command.args("gen-ensime", "Generate a .ensime for the project.")(genEnsime),
-    commands += Command.command("gen-ensime-project", "Generate a project/.ensime for the project definition.", "")(genEnsimeProject),
-    commands += Command.command("debugging", "Add debugging flags to all forked JVM processes.", "")(toggleDebugging(true)),
-    commands += Command.command("debugging-off", "Remove debugging flags from all forked JVM processes.", "")(toggleDebugging(false)),
+    commands += Command.args("gen-ensime", ("", ""), "Generate a .ensime for the project.", "proj1 proj2")(genEnsime),
+    commands += Command.command("gen-ensime-project", "", "Generate a project/.ensime for the project definition.")(genEnsimeProject),
+    commands += Command.command("debugging", "", "Add debugging flags to all forked JVM processes.")(toggleDebugging(true)),
+    commands += Command.command("debugging-off", "", "Remove debugging flags from all forked JVM processes.")(toggleDebugging(false)),
     EnsimeKeys.debuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
     EnsimeKeys.debuggingPort := 5005,
     EnsimeKeys.javaFlags := JavaFlags,
