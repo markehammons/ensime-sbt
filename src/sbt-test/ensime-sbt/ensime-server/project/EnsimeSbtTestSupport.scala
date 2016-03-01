@@ -8,7 +8,8 @@ import collection.JavaConverters._
 import util.Properties
 import org.ensime.CommandSupport
 
-object EnsimeSbtTestSupport extends AutoPlugin with CommandSupport {
+object EnsimeSbtTestSupport extends AutoPlugin {
+  import CommandSupport._
 
   {
     // horrible hack to enable side effects in EnsimePlugin
