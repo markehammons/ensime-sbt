@@ -8,7 +8,8 @@ import collection.JavaConverters._
 import util.Properties
 import org.ensime.CommandSupport
 
-object EnsimeSbtTestSupport extends AutoPlugin with CommandSupport {
+object EnsimeSbtTestSupport extends AutoPlugin {
+  import CommandSupport._
 
   {
     // horrible hack to enable side effects in EnsimePlugin
@@ -23,6 +24,7 @@ object EnsimeSbtTestSupport extends AutoPlugin with CommandSupport {
   )
 
   override lazy val projectSettings = Seq(
+    ivyLoggingLevel := UpdateLogging.Quiet,
     InputKey[Unit]("checkJavaOptions") := {
       val args = parser.parsed.toList
       val opts = javaOptions.value.toList.map(_.toString)
@@ -43,6 +45,7 @@ object EnsimeSbtTestSupport extends AutoPlugin with CommandSupport {
     val jdkHome = javaHome.gimme.getOrElse(file(Properties.jdkHome)).getAbsolutePath
 
     val List(got, expect) = args.map { filename =>
+      log.info(s"loading $filename")
       // not windows friendly
       IO.readLines(file(filename)).map {
         line =>
@@ -70,7 +73,7 @@ object EnsimeSbtTestSupport extends AutoPlugin with CommandSupport {
     val deltas = DiffUtils.diff(expect.asJava, got.asJava).getDeltas.asScala
     if (!deltas.isEmpty) {
       // for local debugging
-      //IO.write(file(Properties.userHome + "/ensime-got"), got.mkString("\n"))
+      IO.write(file(Properties.userHome + "/ensime-got"), got.mkString("\n"))
       throw new MessageOnlyException(s".ensime diff: ${deltas.mkString("\n")}")
     }
 
