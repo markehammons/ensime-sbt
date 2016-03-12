@@ -81,7 +81,14 @@ object Imports {
     val megaUpdate = TaskKey[Map[ProjectRef, (UpdateReport, UpdateReport)]](
       "Runs the aggregated UpdateReport for `update' and `updateClassifiers' respectively."
     )
-
+    val configTransformer = settingKey[EnsimeConfig => EnsimeConfig](
+      "A function that is applied to a generated ENSIME configuration. This transformer function " +
+        "can be used to add or filter any resulting config and can serve as a hook for other plugins."
+    )
+    val configTransformerProject = settingKey[EnsimeConfig => EnsimeConfig](
+      "A function that is applied to a generated ENSIME project config. Equivalent of 'configTransformer' task, " +
+        "on the build level."
+    )
   }
 }
 
@@ -127,7 +134,8 @@ object EnsimePlugin extends AutoPlugin {
   override lazy val projectSettings = Seq(
     EnsimeKeys.unmanagedSourceArchives := Nil,
     EnsimeKeys.unmanagedJavadocArchives := Nil,
-
+    EnsimeKeys.configTransformer := identity,
+    EnsimeKeys.configTransformerProject := identity,
     EnsimeKeys.useTarget := None,
 
     // Even though these are Global in ENSIME (until
@@ -281,8 +289,10 @@ object EnsimePlugin extends AutoPlugin {
       disableSourceMonitoring, disableClassMonitoring
     )
 
+    val transformedConfig = EnsimeKeys.configTransformer.gimme.apply(config)
+
     // workaround for Windows
-    write(out, toSExp(config).replaceAll("\r\n", "\n") + "\n")
+    write(out, toSExp(transformedConfig).replaceAll("\r\n", "\n") + "\n")
 
     if (ignoringSourceDirs.nonEmpty) {
       log.warn(
@@ -479,7 +489,9 @@ object EnsimePlugin extends AutoPlugin {
       false, false
     )
 
-    write(out, toSExp(config).replaceAll("\r\n", "\n") + "\n")
+    val transformedConfig = EnsimeKeys.configTransformerProject.gimme.apply(config)
+
+    write(out, toSExp(transformedConfig).replaceAll("\r\n", "\n") + "\n")
 
     state
   }
