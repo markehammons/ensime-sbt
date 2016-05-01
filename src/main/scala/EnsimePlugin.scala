@@ -262,7 +262,7 @@ object EnsimePlugin extends AutoPlugin {
         }
     }
 
-  // it would be good if debugging-off was automatically triggered
+  // it would be good if debuggingOff was automatically triggered
   // https://stackoverflow.com/questions/32350617
   def toggleDebugging(enable: Boolean): State => State = { implicit state: State =>
     val extracted = Project.extract(state)
