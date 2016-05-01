@@ -113,6 +113,12 @@ object EnsimePlugin extends AutoPlugin {
     commands += Command.command("ensimeConfigProject", "", "Generate a project/.ensime for the project definition.")(ensimeConfigProject),
     commands += Command.command("debugging", "", "Add debugging flags to all forked JVM processes.")(toggleDebugging(true)),
     commands += Command.command("debuggingOff", "", "Remove debugging flags from all forked JVM processes.")(toggleDebugging(false)),
+
+    // deprecating in 1.0
+    commands += Command.args("gen-ensime", ("", ""), "Generate a .ensime for the project.", "proj1 proj2")(genEnsime),
+    commands += Command.command("gen-ensime-project", "", "Generate a project/.ensime for the project definition.")(genEnsimeProject),
+    commands += Command.command("debugging-off", "", "Remove debugging flags from all forked JVM processes.")(debugging_off(false)),
+
     EnsimeKeys.debuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
     EnsimeKeys.debuggingPort := 5005,
     EnsimeKeys.javaFlags := JavaFlags,
@@ -261,6 +267,18 @@ object EnsimePlugin extends AutoPlugin {
           }
         }
     }
+
+  private def logDeprecatedCommand(old: String, replacement: String): State => State = {
+    state =>
+      state.globalLogging.full.warn(s"`$old' is deprecated and will be removed. Use `$replacement' instead.")
+      state
+  }
+  def debugging_off(enable: Boolean): State => State = toggleDebugging(enable) andThen logDeprecatedCommand("debugging-off", "debuggingOff")
+  def genEnsime: (State, Seq[String]) => State = { (state: State, args: Seq[String]) =>
+    ensimeConfig(state, args)
+    logDeprecatedCommand("gen-ensime", "ensimeConfig")(state)
+  }
+  def genEnsimeProject: State => State = ensimeConfigProject andThen logDeprecatedCommand("gen-ensime-project", "ensimeConfigProject")
 
   // it would be good if debuggingOff was automatically triggered
   // https://stackoverflow.com/questions/32350617
