@@ -14,13 +14,13 @@ object EnsimeSbtBuild extends Build {
 
   override val settings = super.settings ++ Seq(
     organization := "org.ensime",
-    version := "0.4.1-SNAPSHOT"
+    version := "0.5.0-SNAPSHOT"
   ) ++ sonatype("ensime", "ensime-sbt", Apache2)
 
-  lazy val root = Project("ensime-sbt", file(".")).
+  lazy val root = Project("sbt-ensime", file(".")).
     settings(scriptedSettings ++ Sensible.settings).
     settings(
-      name := "ensime-sbt",
+      name := "sbt-ensime",
       sbtPlugin := true,
       // intentionally old version of scalariform: do not force an upgrade upon users
       libraryDependencies += "org.scalariform" %% "scalariform" % "0.1.4",

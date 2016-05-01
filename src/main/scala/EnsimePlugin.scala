@@ -24,7 +24,7 @@ object Imports {
   object EnsimeKeys {
     val compileOnly = InputKey[Unit]("compileOnly", "Compiles a single scala file")
 
-    // for gen-ensime
+    // for ensimeConfig
     val name = SettingKey[String](
       "Name of the ENSIME project"
     )
@@ -57,10 +57,10 @@ object Imports {
     // used to start the REPL and assembly jar bundles of ensime-server.
     // intransitive because we don't need parser combinators, scala.xml or jline
     val scalaCompilerJarModuleIDs = settingKey[Seq[ModuleID]](
-      "The artefacts to resolve for :scala-compiler-jars in gen-ensime."
+      "The artefacts to resolve for :scala-compiler-jars in ensimeConfig."
     )
 
-    // for gen-ensime-project
+    // for ensimeConfigProject
     val compilerProjectArgs = TaskKey[Seq[String]](
       "Arguments for the project definition presentation compiler (not possible to extract)."
     )
@@ -109,10 +109,16 @@ object EnsimePlugin extends AutoPlugin {
   val EnsimeInternal = config("ensime-internal").hide
 
   override lazy val buildSettings = Seq(
+    commands += Command.args("ensimeConfig", ("", ""), "Generate a .ensime for the project.", "proj1 proj2")(ensimeConfig),
+    commands += Command.command("ensimeConfigProject", "", "Generate a project/.ensime for the project definition.")(ensimeConfigProject),
+    commands += Command.command("debugging", "", "Add debugging flags to all forked JVM processes.")(toggleDebugging(true)),
+    commands += Command.command("debuggingOff", "", "Remove debugging flags from all forked JVM processes.")(toggleDebugging(false)),
+
+    // deprecating in 1.0
     commands += Command.args("gen-ensime", ("", ""), "Generate a .ensime for the project.", "proj1 proj2")(genEnsime),
     commands += Command.command("gen-ensime-project", "", "Generate a project/.ensime for the project definition.")(genEnsimeProject),
-    commands += Command.command("debugging", "", "Add debugging flags to all forked JVM processes.")(toggleDebugging(true)),
-    commands += Command.command("debugging-off", "", "Remove debugging flags from all forked JVM processes.")(toggleDebugging(false)),
+    commands += Command.command("debugging-off", "", "Remove debugging flags from all forked JVM processes.")(debugging_off(false)),
+
     EnsimeKeys.debuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
     EnsimeKeys.debuggingPort := 5005,
     EnsimeKeys.javaFlags := JavaFlags,
@@ -262,7 +268,19 @@ object EnsimePlugin extends AutoPlugin {
         }
     }
 
-  // it would be good if debugging-off was automatically triggered
+  private def logDeprecatedCommand(old: String, replacement: String): State => State = {
+    state =>
+      state.globalLogging.full.error(s"`$old' is deprecated and will be removed. Use `$replacement' instead.")
+      state
+  }
+  def debugging_off(enable: Boolean): State => State = toggleDebugging(enable) andThen logDeprecatedCommand("debugging-off", "debuggingOff")
+  def genEnsime: (State, Seq[String]) => State = { (state: State, args: Seq[String]) =>
+    ensimeConfig(state, args)
+    logDeprecatedCommand("gen-ensime", "ensimeConfig")(state)
+  }
+  def genEnsimeProject: State => State = ensimeConfigProject andThen logDeprecatedCommand("gen-ensime-project", "ensimeConfigProject")
+
+  // it would be good if debuggingOff was automatically triggered
   // https://stackoverflow.com/questions/32350617
   def toggleDebugging(enable: Boolean): State => State = { implicit state: State =>
     val extracted = Project.extract(state)
@@ -288,7 +306,7 @@ object EnsimePlugin extends AutoPlugin {
     extracted.append(newSettings, state)
   }
 
-  def genEnsime: (State, Seq[String]) => State = { (state, args) =>
+  def ensimeConfig: (State, Seq[String]) => State = { (state, args) =>
     val extracted = Project.extract(state)
     implicit val st = state
     implicit val pr = extracted.currentRef
@@ -507,7 +525,7 @@ object EnsimePlugin extends AutoPlugin {
     )
   }
 
-  def genEnsimeProject: State => State = { implicit state: State =>
+  def ensimeConfigProject: State => State = { implicit state: State =>
     val extracted = Project.extract(state)
 
     implicit val pr = extracted.currentRef
