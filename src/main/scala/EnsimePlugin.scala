@@ -11,6 +11,8 @@ import sbt.IO._
 import sbt.Keys._
 import sbt.complete.Parsers._
 import scala.collection.JavaConverters._
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Promise}
 import scala.util._
 import scalariform.formatter.preferences._
 
@@ -20,6 +22,8 @@ import scalariform.formatter.preferences._
  */
 object Imports {
   object EnsimeKeys {
+    val compileOnly = InputKey[Unit]("compileOnly", "Compiles a single scala file")
+
     // for gen-ensime
     val name = SettingKey[String](
       "Name of the ENSIME project"
@@ -168,8 +172,18 @@ object EnsimePlugin extends AutoPlugin {
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
       "org.scala-lang" % "scalap" % scalaVersion.value
     ).map(_ % EnsimeInternal.name intransitive ()),
-    libraryDependencies ++= EnsimeKeys.scalaCompilerJarModuleIDs.value
-  )
+    libraryDependencies ++= EnsimeKeys.scalaCompilerJarModuleIDs.value,
+
+    aggregate in EnsimeKeys.compileOnly := false
+  ) ++ Seq(Compile, Test).flatMap { config =>
+      // WORKAROUND https://github.com/sbt/sbt/issues/2580
+      inConfig(config) {
+        Seq(
+          EnsimeKeys.compileOnly <<= compileOnlyTask,
+          scalacOptions in EnsimeKeys.compileOnly := scalacOptions.value
+        )
+      }
+    }
 
   def defaultCompilerFlags(scalaVersion: String): Seq[String] = Seq(
     "-feature",
@@ -186,6 +200,66 @@ object EnsimePlugin extends AutoPlugin {
         case Some((2, v)) if v >= 11 => Seq("-Ywarn-unused-import", "-Ymacro-expand:discard")
         case _                       => Nil
       }
+    }
+
+  private val noChanges = new xsbti.compile.DependencyChanges {
+    def isEmpty = true
+    def modifiedBinaries = Array()
+    def modifiedClasses = Array()
+  }
+  private object noopCallback extends xsbti.AnalysisCallback {
+    override val nameHashing: Boolean = true
+    def beginSource(source: File): Unit = {}
+    def generatedClass(source: File, module: File, name: String): Unit = {}
+    def api(sourceFile: File, source: xsbti.api.SourceAPI): Unit = {}
+    def sourceDependency(dependsOn: File, source: File, publicInherited: Boolean): Unit = {}
+    def binaryDependency(binary: File, name: String, source: File, publicInherited: Boolean): Unit = {}
+    def endSource(sourcePath: File): Unit = {}
+    def problem(what: String, pos: xsbti.Position, msg: String, severity: xsbti.Severity, reported: Boolean): Unit = {}
+    def usedName(sourceFile: File, names: String): Unit = {}
+    override def binaryDependency(file: File, s: String, file1: File, dependencyContext: xsbti.DependencyContext): Unit = {}
+    override def sourceDependency(file: File, file1: File, dependencyContext: xsbti.DependencyContext): Unit = {}
+  }
+
+  // DEPRECATED with no alternative https://github.com/sbt/sbt/issues/2417
+  def compileOnlyTask: Def.Initialize[InputTask[Unit]] = InputTask(
+    (s: State) => Def.spaceDelimited()
+  ) { (argTask: TaskKey[Seq[String]]) =>
+      (
+        argTask,
+        sourceDirectories,
+        dependencyClasspath,
+        classDirectory,
+        scalacOptions in EnsimeKeys.compileOnly,
+        maxErrors,
+        compileInputs in compile,
+        compilers,
+        streams
+      ).map { (args, dirs, cp, out, opts, merrs, in, cs, s) =>
+          if (args.isEmpty) throw new IllegalArgumentException("needs a file")
+          args.foreach { arg =>
+            val input: File = file(arg).getCanonicalFile
+            val sourceDirs = dirs.map(_.getCanonicalFile)
+
+            val here = sourceDirs.exists { dir => input.getPath.startsWith(dir.getPath) }
+            if (!here || !input.exists())
+              throw new IllegalArgumentException(s"$arg not associated to $sourceDirs")
+
+            // there is no reason why we couldn't compileOnly other
+            // languages, but they would require explicit support.
+            // Java shouldn't be too hard if somebody wants it.
+            if (!input.getName.endsWith(".scala"))
+              throw new IllegalArgumentException(s"only .scala files are supported: $arg")
+
+            if (!out.exists()) IO.createDirectory(out)
+            s.log.info(s"""Compiling $input with ${opts.mkString(" ")}""")
+
+            cs.scalac(
+              Seq(input), noChanges, cp.map(_.data), out, opts,
+              noopCallback, merrs, in.incSetup.cache, s.log
+            )
+          }
+        }
     }
 
   // it would be good if debugging-off was automatically triggered

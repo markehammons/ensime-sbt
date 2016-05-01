@@ -1,0 +1,31 @@
+# basic behaviour
+> a/compile
+$ sleep 1000
+$ touch timestamp
+$ sleep 1000
+> a/compileOnly a/src/main/scala/Foo.scala
+$ newer a/target/scala-2.10/classes/Foo.class timestamp
+$ newer timestamp a/target/scala-2.10/classes/Bar.class
+
+# works in the Test Configuration
+
+# for some bizarre reason, we get "Compilation in progress" errors
+# from javac unless we compile all the java sources first. It looks
+# like a bug in the sbt handling of the java compiler (or javac
+# itself)
+> b/compile
+
+# -Xprint-phases disables compilation
+-> b/test:compileOnly b/src/test/scala/FooTest.scala
+# but make sure we haven't broken compilation
+> b/test:compile
+
+# failure modes
+$ sleep 1000
+-> compileOnly
+-> compileOnly a/src/test/scala/Foo.scala
+-> compileOnly b/src/main/scala/Foo.scala
+-> compileOnly b/src/main/java/Baz.java
+# aggregation
+-> compileOnly a/src/main/scala/Foo.scala
+-> test:compileOnly b/src/test/scala/FooTest.scala
