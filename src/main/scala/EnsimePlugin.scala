@@ -270,7 +270,7 @@ object EnsimePlugin extends AutoPlugin {
 
   private def logDeprecatedCommand(old: String, replacement: String): State => State = {
     state =>
-      state.globalLogging.full.warn(s"`$old' is deprecated and will be removed. Use `$replacement' instead.")
+      state.globalLogging.full.error(s"`$old' is deprecated and will be removed. Use `$replacement' instead.")
       state
   }
   def debugging_off(enable: Boolean): State => State = toggleDebugging(enable) andThen logDeprecatedCommand("debugging-off", "debuggingOff")
