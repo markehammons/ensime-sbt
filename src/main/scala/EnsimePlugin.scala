@@ -24,7 +24,7 @@ object Imports {
   object EnsimeKeys {
     val compileOnly = InputKey[Unit]("compileOnly", "Compiles a single scala file")
 
-    // for gen-ensime
+    // for ensimeConfig
     val name = SettingKey[String](
       "Name of the ENSIME project"
     )
@@ -57,10 +57,10 @@ object Imports {
     // used to start the REPL and assembly jar bundles of ensime-server.
     // intransitive because we don't need parser combinators, scala.xml or jline
     val scalaCompilerJarModuleIDs = settingKey[Seq[ModuleID]](
-      "The artefacts to resolve for :scala-compiler-jars in gen-ensime."
+      "The artefacts to resolve for :scala-compiler-jars in ensimeConfig."
     )
 
-    // for gen-ensime-project
+    // for ensimeConfigProject
     val compilerProjectArgs = TaskKey[Seq[String]](
       "Arguments for the project definition presentation compiler (not possible to extract)."
     )
@@ -109,10 +109,10 @@ object EnsimePlugin extends AutoPlugin {
   val EnsimeInternal = config("ensime-internal").hide
 
   override lazy val buildSettings = Seq(
-    commands += Command.args("gen-ensime", ("", ""), "Generate a .ensime for the project.", "proj1 proj2")(genEnsime),
-    commands += Command.command("gen-ensime-project", "", "Generate a project/.ensime for the project definition.")(genEnsimeProject),
+    commands += Command.args("ensimeConfig", ("", ""), "Generate a .ensime for the project.", "proj1 proj2")(ensimeConfig),
+    commands += Command.command("ensimeConfigProject", "", "Generate a project/.ensime for the project definition.")(ensimeConfigProject),
     commands += Command.command("debugging", "", "Add debugging flags to all forked JVM processes.")(toggleDebugging(true)),
-    commands += Command.command("debugging-off", "", "Remove debugging flags from all forked JVM processes.")(toggleDebugging(false)),
+    commands += Command.command("debuggingOff", "", "Remove debugging flags from all forked JVM processes.")(toggleDebugging(false)),
     EnsimeKeys.debuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
     EnsimeKeys.debuggingPort := 5005,
     EnsimeKeys.javaFlags := JavaFlags,
@@ -288,7 +288,7 @@ object EnsimePlugin extends AutoPlugin {
     extracted.append(newSettings, state)
   }
 
-  def genEnsime: (State, Seq[String]) => State = { (state, args) =>
+  def ensimeConfig: (State, Seq[String]) => State = { (state, args) =>
     val extracted = Project.extract(state)
     implicit val st = state
     implicit val pr = extracted.currentRef
@@ -507,7 +507,7 @@ object EnsimePlugin extends AutoPlugin {
     )
   }
 
-  def genEnsimeProject: State => State = { implicit state: State =>
+  def ensimeConfigProject: State => State = { implicit state: State =>
     val extracted = Project.extract(state)
 
     implicit val pr = extracted.currentRef

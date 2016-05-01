@@ -1,9 +1,9 @@
-> gen-ensime
+> ensimeConfig
 $ exists scalaVersionAtStartupWarning
-> ensimeExpect .ensime gen-ensime.expect
-> gen-ensime-project
+> ensimeExpect .ensime ensimeConfig.expect
+> ensimeConfigProject
 $ exists scalaVersionAtStartupWarning
-> ensimeExpect project/.ensime gen-ensime-project.expect
+> ensimeExpect project/.ensime ensimeConfigProject.expect
 > checkJavaOptions
 > debugging
 > checkJavaOptions -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005

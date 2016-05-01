@@ -1,6 +1,6 @@
-> gen-ensime
+> ensimeConfig
 $ absent scalaVersionAtStartupWarning
-> ensimeExpect .ensime gen-ensime.expect
-> gen-ensime-project
+> ensimeExpect .ensime ensimeConfig.expect
+> ensimeConfigProject
 $ absent scalaVersionAtStartupWarning
-> ensimeExpect project/.ensime gen-ensime-project.expect
+> ensimeExpect project/.ensime ensimeConfigProject.expect
