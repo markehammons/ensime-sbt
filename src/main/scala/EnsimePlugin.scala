@@ -505,8 +505,8 @@ object EnsimePlugin extends AutoPlugin {
         phase => jarsFor(phase) ++ unmanagedJarsFor(phase)
       }
     } -- mainJars
-    val jarSrcs = testPhases.flatMap(jarSrcsFor)
-    val jarDocs = testPhases.flatMap(jarDocsFor) ++ myDoc
+    val jarSrcs = testPhases.flatMap(jarSrcsFor) ++ jarSrcsFor(Provided)
+    val jarDocs = testPhases.flatMap(jarDocsFor) ++ jarDocsFor(Provided) ++ myDoc
 
     if (scalaV != scalaVersion.gimme) {
       if (System.getProperty("ensime.sbt.debug") != null) {
