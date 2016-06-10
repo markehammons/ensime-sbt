@@ -216,6 +216,7 @@ object EnsimePlugin extends AutoPlugin {
     def modifiedClasses = Array()
   }
   private object noopCallback extends xsbti.AnalysisCallback {
+    val includeSynthToNameHashing: Boolean = true
     override val nameHashing: Boolean = true
     def beginSource(source: File): Unit = {}
     def generatedClass(source: File, module: File, name: String): Unit = {}
@@ -263,7 +264,7 @@ object EnsimePlugin extends AutoPlugin {
             s.log.info(s"""Compiling $input with ${opts.mkString(" ")}""")
 
             cs.scalac(
-              Seq(input), noChanges, cp.map(_.data), out, opts,
+              Seq(input), noChanges, cp.map(_.data) :+ out, out, opts,
               noopCallback, merrs, in.incSetup.cache, s.log
             )
           }
@@ -317,10 +318,17 @@ object EnsimePlugin extends AutoPlugin {
     // no way to detect this value later on unless we capture it
     val scalaV = (scalaVersion).gimme
 
+    var transitiveCache = Map.empty[ProjectRef, Set[ProjectRef]]
     def transitiveProjects(ref: ProjectRef): Set[ProjectRef] = {
-      val proj = Project.getProjectForReference(ref, bs).get
-      Set(ref) ++ proj.dependencies.flatMap { dep =>
-        transitiveProjects(dep.project)
+      if (transitiveCache.contains(ref))
+        transitiveCache(ref)
+      else {
+        val proj = Project.getProjectForReference(ref, bs).get
+        val deps = Set(ref) ++ proj.dependencies.flatMap { dep =>
+          transitiveProjects(dep.project)
+        }
+        transitiveCache += ref -> deps
+        deps
       }
     }
 
