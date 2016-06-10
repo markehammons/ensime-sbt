@@ -216,6 +216,7 @@ object EnsimePlugin extends AutoPlugin {
     def modifiedClasses = Array()
   }
   private object noopCallback extends xsbti.AnalysisCallback {
+    val includeSynthToNameHashing: Boolean = true
     override val nameHashing: Boolean = true
     def beginSource(source: File): Unit = {}
     def generatedClass(source: File, module: File, name: String): Unit = {}
