@@ -263,7 +263,7 @@ object EnsimePlugin extends AutoPlugin {
             s.log.info(s"""Compiling $input with ${opts.mkString(" ")}""")
 
             cs.scalac(
-              Seq(input), noChanges, cp.map(_.data), out, opts,
+              Seq(input), noChanges, cp.map(_.data) :+ out, out, opts,
               noopCallback, merrs, in.incSetup.cache, s.log
             )
           }
