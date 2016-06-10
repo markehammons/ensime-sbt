@@ -317,10 +317,17 @@ object EnsimePlugin extends AutoPlugin {
     // no way to detect this value later on unless we capture it
     val scalaV = (scalaVersion).gimme
 
+    var transitiveCache = Map.empty[ProjectRef, Set[ProjectRef]]
     def transitiveProjects(ref: ProjectRef): Set[ProjectRef] = {
-      val proj = Project.getProjectForReference(ref, bs).get
-      Set(ref) ++ proj.dependencies.flatMap { dep =>
-        transitiveProjects(dep.project)
+      if (transitiveCache.contains(ref))
+        transitiveCache(ref)
+      else {
+        val proj = Project.getProjectForReference(ref, bs).get
+        val deps = Set(ref) ++ proj.dependencies.flatMap { dep =>
+          transitiveProjects(dep.project)
+        }
+        transitiveCache += ref -> deps
+        deps
       }
     }
 
