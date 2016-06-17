@@ -36,9 +36,7 @@ object EnsimeBuild extends Build {
 
     dependencyOverrides ++= Set(
       "org.apache.lucene" % "lucene-core" % luceneVersion
-    ),
-
-    EnsimeKeys.scalariform := ScalariformKeys.preferences.value
+    )
 
   // https://github.com/sbt/sbt/issues/2459 --- misses shapeless in core/it:test
   // updateOptions := updateOptions.value.withCachedResolution(true)
