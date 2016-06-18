@@ -578,8 +578,8 @@ object EnsimePlugin extends AutoPlugin {
     val out = root / ".ensime"
     val cacheDir = root / ".ensime_cache"
     val name = EnsimeKeys.ensimeName.gimmeOpt.getOrElse {
-      file(Properties.userDir).getName + "-project"
-    }
+      file(Properties.userDir).getName
+    } + "-project"
 
     val compilerArgs = {
       EnsimeKeys.ensimeCompilerProjectArgs.run.toList ++
