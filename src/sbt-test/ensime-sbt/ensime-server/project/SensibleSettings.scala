@@ -1,6 +1,7 @@
 // Copyright 2016 Sam Halliday
 // Licence: http://www.apache.org/licenses/LICENSE-2.0
 import com.typesafe.sbt.SbtScalariform._
+import java.util.concurrent.atomic.AtomicLong
 import sbt.Keys._
 import sbt._
 
@@ -10,6 +11,9 @@ import scala.util.Properties
  * A bunch of sensible defaults that fommil typically uses.
  */
 object Sensible {
+
+  // used for unique gclog naming
+  private val forkCount = new AtomicLong()
 
   lazy val settings = Seq(
     ivyLoggingLevel := UpdateLogging.Quiet,
@@ -43,10 +47,10 @@ object Sensible {
     ),
     javacOptions in doc ++= Seq("-source", "1.6"),
 
-    javaOptions := Seq("-Xss2m", "-XX:MaxPermSize=256m", "-Xms256m", "-Xmx256m"),
+    javaOptions := Seq("-Xss2m", "-XX:MaxPermSize=256m", "-Xms384m", "-Xmx384m"),
     javaOptions += "-Dfile.encoding=UTF8",
     javaOptions ++= Seq("-XX:+UseConcMarkSweepGC", "-XX:+CMSIncrementalMode"),
-    javaOptions in run ++= yourkitAgent,
+    javaOptions in run ++= yourkitAgent, // interferes with sockets
 
     maxErrors := 1,
     fork := true,
@@ -97,14 +101,30 @@ object Sensible {
         }
       },
 
+    javaOptions <++= (baseDirectory in ThisBuild, configuration, name).map { (base, config, n) =>
+      if (sys.env.get("GC_LOGGING").isEmpty) Nil
+      else {
+        val count = forkCount.incrementAndGet() // subject to task evaluation
+        val out = { base / s"gc-$config-$n.log" }.getCanonicalPath
+        Seq(
+          // https://github.com/fommil/lions-share
+          s"-Xloggc:$out",
+          "-XX:+PrintGCDetails",
+          "-XX:+PrintGCDateStamps",
+          "-XX:+PrintTenuringDistribution",
+          "-XX:+PrintHeapAtGC"
+        )
+      }
+    },
+
     testOptions ++= noColorIfEmacs,
     testFrameworks := Seq(TestFrameworks.ScalaTest, TestFrameworks.JUnit)
   )
 
   val scalaModulesVersion = "1.0.4"
-  val akkaVersion = "2.3.14"
+  val akkaVersion = "2.3.15"
   val scalatestVersion = "2.2.6"
-  val logbackVersion = "1.7.19"
+  val logbackVersion = "1.7.21"
   val quasiquotesVersion = "2.0.1"
   val guavaVersion = "19.0"
 
@@ -114,9 +134,9 @@ object Sensible {
   def shapeless(scalaVersion: String) = {
     if (scalaVersion.startsWith("2.10.")) macroParadise
     else Nil
-  } :+ "com.chuusai" %% "shapeless" % "2.3.0"
+  } :+ "com.chuusai" %% "shapeless" % "2.3.1"
   val logback = Seq(
-    "ch.qos.logback" % "logback-classic" % "1.1.6",
+    "ch.qos.logback" % "logback-classic" % "1.1.7",
     "org.slf4j" % "slf4j-api" % logbackVersion,
     "org.slf4j" % "jul-to-slf4j" % logbackVersion,
     "org.slf4j" % "jcl-over-slf4j" % logbackVersion
@@ -127,9 +147,11 @@ object Sensible {
   )
 
   def testLibs(config: String = "test") = Seq(
+    "org.codehaus.janino" % "janino" % "2.7.8" % config,
     "org.scalatest" %% "scalatest" % scalatestVersion % config,
     "org.scalamock" %% "scalamock-scalatest-support" % "3.2.2" % config,
-    // scalacheck 1.13.0 is java 7+
+    // scalacheck 1.13.0 is incompatible with scalatest 2.2
+    // https://github.com/rickynils/scalacheck/issues/217
     "org.scalacheck" %% "scalacheck" % "1.12.5" % config,
     "com.typesafe.akka" %% "akka-testkit" % akkaVersion % config,
     "com.typesafe.akka" %% "akka-slf4j" % akkaVersion % config
@@ -139,7 +161,7 @@ object Sensible {
   val yourkitAgent = Properties.envOrNone("YOURKIT_AGENT").map { name =>
     val agent = file(name)
     require(agent.exists(), s"Yourkit agent specified ($agent) does not exist")
-    Seq(s"-agentpath:${agent.getCanonicalPath}")
+    Seq(s"-agentpath:${agent.getCanonicalPath}=quiet")
   }.getOrElse(Nil)
 
   // WORKAROUND: https://github.com/scalatest/scalatest/issues/511

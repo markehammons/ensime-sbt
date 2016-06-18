@@ -5,6 +5,7 @@ build:
     - SONATYPE_USERNAME=$$SONATYPE_USERNAME
     - SONATYPE_PASSWORD=$$SONATYPE_PASSWORD
     - EMACS=/opt/emacs-24.5/bin/emacs
+    - ENSIME_SERVER_VERSION=1.0.0-SNAPSHOT
     - AKKA_TEST_TIMEFACTOR=10
     - SBT_TASK_LIMIT=6
     - COURSIER_MODE=update-local-changing,missing
@@ -15,7 +16,7 @@ build:
       fi
     - git log | head -n 20
     - host `curl -s http://httpbin.org/ip | jq -r '.origin'` || true ;
-    - sbt ++$SCALA_VERSION gen-ensime ;
+    - sbt ++$SCALA_VERSION ensimeConfig ;
       sbt ++$SCALA_VERSION clean test:compile it:compile doc ;
       if $(! git diff --exit-code --quiet) ; then
         echo "Code formatting does not meet the project's standards:" ;
@@ -51,7 +52,7 @@ deploy:
       matrix:
         SCALA_VERSION: 2.11.8
   sftp:
-    host: docs.typelevel.org
+    host: ensime.typelevel.org
     username: typelevel
     destination_path: ensime.typelevel.org/
     files: 

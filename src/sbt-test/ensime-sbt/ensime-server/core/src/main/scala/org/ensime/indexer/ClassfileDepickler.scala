@@ -2,10 +2,11 @@
 // Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.indexer
 
+import scala.collection.breakOut
+import scala.tools.scalap.scalax.rules.scalasig._
+
 import com.google.common.io.ByteStreams
 import org.apache.commons.vfs2.FileObject
-
-import scala.tools.scalap.scalax.rules.scalasig._
 
 class ClassfileDepickler(file: FileObject) {
 
@@ -25,13 +26,12 @@ class ClassfileDepickler(file: FileObject) {
     } finally in.close()
   }
 
-  def getTypeAliases: Seq[RawType] = {
+  def getTypeAliases: List[RawType] = {
     scalasig match {
       case Some(sig: ScalaSig) =>
-        sig.symbols.flatMap {
-          case s: AliasSymbol => Some(RawType(symbolName(s), access(s)))
-          case _ => None
-        }
+        sig.symbols.collect {
+          case s: AliasSymbol => RawType(symbolName(s), access(s))
+        }(breakOut)
       case None => Nil
     }
   }

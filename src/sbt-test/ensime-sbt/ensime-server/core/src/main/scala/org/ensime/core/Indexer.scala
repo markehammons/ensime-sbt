@@ -4,13 +4,11 @@ package org.ensime.core
 
 import akka.actor._
 import akka.event.LoggingReceive
-
 import org.ensime.api._
-
-import org.ensime.indexer.DatabaseService.FqnSymbol
-import org.ensime.vfs._
 import org.ensime.indexer.SearchService
+import org.ensime.indexer.database.DatabaseService.FqnSymbol
 import org.ensime.model._
+import org.ensime.vfs._
 
 // only used for queries by other components
 final case class TypeCompletionsReq(prefix: String, maxResults: Int)

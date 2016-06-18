@@ -21,20 +21,17 @@ install:
   - cmd: SET SBT_OPTS=-XX:MaxPermSize=256m -Xss2m -Xms750m -Xmx750m
   - cmd: SET AKKA_TEST_TIMEFACTOR=10
   - cmd: SET SBT_TASK_LIMIT=2
+  - cmd: SET GC_LOGGING=true
 build_script:
-  - sbt clean compile test:compile it:compile
-before_test:
-  - sbt gen-ensime
+  - sbt ensimeConfig
+  - sbt compile test:compile it:compile
 test_script:
-  - sbt test "testOnly -- -l Debugger"
-  - rmdir /s /q C:\Users\appveyor\.coursier\cache\v1\https\oss.sonatype.org
+  - sbt test it:test
 cache:
   - C:\sbt\
   - C:\Users\appveyor\.m2
   - C:\Users\appveyor\.ivy2
   - C:\Users\appveyor\.coursier
   - C:\Program Files\Java\jdk1.7.0\src.zip
-on_failure:
-  - appveyor PushArtifact -Path core/test.log
-  - appveyor PushArtifact -Path core/it.log
-
+on_finish:
+  - ps: Get-ChildItem -Path .\* -Include *.log -Recurse | % { Push-AppveyorArtifact $_.FullName -FileName $_.Name }

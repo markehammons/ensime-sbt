@@ -2,19 +2,21 @@
 // Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.indexer
 
-import org.ensime.fixture._
-import org.ensime.util.EnsimeSpec
-import org.ensime.util.file._
-
 import scala.concurrent._
 import scala.concurrent.duration._
 
+import org.ensime.fixture._
+import org.ensime.util.EnsimeSpec
+import org.ensime.util.file._
+import org.scalatest.Matchers._
+
 class SearchServiceSpec extends EnsimeSpec
     with SharedTestKitFixture
-    with SharedSearchServiceFixture
-    with SearchServiceTestUtils {
+    with SharedSearchServiceFixture {
 
   def original = EnsimeConfigFixture.SimpleTestProject
+
+  import SearchServiceTestUtils._
 
   "search refreshing" should "parse all files on a pristine structure" in {
     withSearchService { implicit service =>
@@ -98,19 +100,19 @@ class SearchServiceSpec extends EnsimeSpec
 
   it should "return results from package objects" in withSearchService { implicit service =>
     searchClasses(
-      "org.example.Blip$",
+      "org.example.package$Blip$",
       "Blip"
     )
 
     searchClasses(
-      "org.example.Blop",
+      "org.example.package$Blop",
       "Blop"
     )
   }
 
   "class and method searching" should "return results from classes" in {
     withSearchService { implicit service =>
-      searchesClassesAndMethods(
+      searchesClasses(
         "java.lang.String",
         "String", "string",
         "j.l.str", "j l str"
@@ -132,15 +134,15 @@ class SearchServiceSpec extends EnsimeSpec
   }
 
   it should "return results from static methods" in withSearchService { implicit service =>
-    searchesClassesAndMethods(
-      "java.lang.Runtime.addShutdownHook",
+    searchesMethods(
+      "java.lang.Runtime.addShutdownHook(Ljava/lang/Thread;)V",
       "addShutdownHook"
     )
   }
 
   it should "return results from instance methods" in withSearchService { implicit service =>
-    searchesClassesAndMethods(
-      "java.lang.Runtime.availableProcessors",
+    searchesMethods(
+      "java.lang.Runtime.availableProcessors()I",
       "availableProcessors", "availableP"
     )
   }
@@ -178,15 +180,14 @@ class SearchServiceSpec extends EnsimeSpec
   }
 }
 
-trait SearchServiceTestUtils {
-  self: EnsimeSpec =>
+object SearchServiceTestUtils {
 
   def refresh()(implicit service: SearchService): (Int, Int) =
     Await.result(service.refresh(), Duration.Inf)
 
   def searchClasses(expect: String, query: String)(implicit service: SearchService) = {
     val max = 10
-    val info = s"'$query' expected '$expect')"
+    val info = s"'$query' expected '$expect'"
     val results = service.searchClasses(query, max)
 
     withClue(s"${results.size} $info")(results.size should be <= max)
@@ -224,7 +225,9 @@ trait SearchServiceTestUtils {
   def searchesEmpty(queries: String*)(implicit service: SearchService) =
     queries.toList.foreach(searchExpectEmpty)
 
-  def searchesClassesAndMethods(expect: String, queries: String*)(implicit service: SearchService) =
-    (expect :: queries.toList).foreach(searchClassesAndMethods(expect, _))
+  // doesn't assert that expect finds itself because the lucene query
+  // syntax conflicts with the characters in method FQNs
+  def searchesMethods(expect: String, queries: String*)(implicit service: SearchService) =
+    (queries.toList).foreach(searchClassesAndMethods(expect, _))
 
 }

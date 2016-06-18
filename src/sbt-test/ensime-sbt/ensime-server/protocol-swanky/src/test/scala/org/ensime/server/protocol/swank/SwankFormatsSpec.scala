@@ -491,7 +491,7 @@ class SwankFormatsSpec extends EnsimeSpec with EnsimeTestData {
 
     marshal(
       completionInfo: CompletionInfo,
-      """(:name "name" :type-sig (((("abc" "def") ("hij" "lmn"))) "ABC" nil) :relevance 90 :to-insert "BAZ")"""
+      """(:type-info (:arrow-type nil :name "type1" :decl-as method :full-name "FOO.type1") :name "name" :type-sig (((("abc" "def") ("hij" "lmn"))) "ABC" nil) :relevance 90 :to-insert "BAZ")"""
     )
 
     marshal(
@@ -501,7 +501,7 @@ class SwankFormatsSpec extends EnsimeSpec with EnsimeTestData {
 
     marshal(
       CompletionInfoList("fooBar", List(completionInfo)): CompletionInfoList,
-      """(:prefix "fooBar" :completions ((:name "name" :type-sig (((("abc" "def") ("hij" "lmn"))) "ABC" nil) :relevance 90 :to-insert "BAZ")))"""
+      """(:prefix "fooBar" :completions ((:type-info (:arrow-type nil :name "type1" :decl-as method :full-name "FOO.type1") :name "name" :type-sig (((("abc" "def") ("hij" "lmn"))) "ABC" nil) :relevance 90 :to-insert "BAZ")))"""
     )
 
     marshal(

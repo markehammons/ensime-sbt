@@ -4,17 +4,14 @@ package org.ensime.core
 
 import java.io.File
 
-import org.ensime.api.OffsetSourcePosition
-import org.ensime.api.LineSourcePosition
-import org.ensime.api.SourceFileInfo
+import org.ensime.api.{ LineSourcePosition, OffsetSourcePosition, SourceFileInfo }
 import org.ensime.core.javac.JavaFqn
 import org.ensime.fixture._
-import org.ensime.indexer.SearchServiceTestUtils
+import org.ensime.indexer.SearchServiceTestUtils._
 import org.ensime.util.EnsimeSpec
 
 class JavaCompilerSpec extends EnsimeSpec
-    with IsolatedJavaCompilerFixture
-    with SearchServiceTestUtils {
+    with IsolatedJavaCompilerFixture {
 
   val original = EnsimeConfigFixture.SimpleTestProject
 
@@ -64,8 +61,8 @@ class JavaCompilerSpec extends EnsimeSpec
   }
 
   it should "find symbol at point" in withJavaCompiler { (_, config, cc, store, search) =>
-    implicit val searchService = search
-    refresh()
+    refresh()(search)
+
     runForPositionInCompiledSource(config, cc,
       "package org.example;",
       "import java.io.File;",

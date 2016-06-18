@@ -42,7 +42,7 @@ trait StructureViewBuilder {
     private def traverse(tree: Tree, parent: DefsBuilder): Unit = {
       tree match {
         case x: DefTree if x.symbol.isSynthetic =>
-        case x: ImplDef =>
+        case x: ImplDef if !x.symbol.isAnonymousClass =>
           val df = DefsBuilder(x.keyword, x.name.toString, pos(x.symbol), new ListBuffer())
           parent.members.append(df)
           x.impl.body.foreach(traverse(_, df))
@@ -63,11 +63,16 @@ trait StructureViewBuilder {
       x.get
     }
 
+    val positionDefined: SourcePosition => Boolean = {
+      case x: EmptySourcePosition => false
+      case _ => true
+    }
+
     getStructureTree(fileInfo) match {
       case Left(tree) =>
         val traverser = new StructureTraverser()
         traverser.traverse(tree)
-        traverser.stucture.toList
+        traverser.stucture.filter(x => positionDefined(x.position)).toList
       case Right(ex) => List.empty
     }
   }

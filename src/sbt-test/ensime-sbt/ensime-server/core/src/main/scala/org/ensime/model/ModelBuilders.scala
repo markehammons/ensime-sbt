@@ -2,25 +2,37 @@
 // Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.model
 
-import org.ensime.api._
-import org.ensime.util.file._
-
-import org.apache.commons.vfs2.FileObject
-import org.ensime.core.RichPresentationCompiler
-import org.ensime.indexer.DatabaseService._
-import org.ensime.vfs._
-
 import scala.collection.mutable
 import scala.reflect.internal.util.{ NoPosition, Position, RangePosition }
 import scala.tools.nsc.io.AbstractFile
 
-trait ModelBuilders { self: RichPresentationCompiler =>
+import org.apache.commons.vfs2.FileObject
+import org.ensime.api._
+import org.ensime.core.{ RichPresentationCompiler, FqnToSymbol }
+import org.ensime.indexer.{ MethodName, PackageName }
+import org.ensime.indexer.database.DatabaseService._
+import org.ensime.util.file._
+import org.ensime.vfs._
+
+trait ModelBuilders {
+  self: RichPresentationCompiler with FqnToSymbol =>
 
   import rootMirror.RootPackage
 
+  def completionSignatureForType(tpe: Type): CompletionSignature = {
+    if (isArrowType(tpe)) {
+      CompletionSignature(
+        tpe.paramss.map { sect =>
+          sect.map { p => (p.name.toString, fullName(p.tpe).underlying) }
+        },
+        fullName(tpe.finalResultType).underlying,
+        tpe.paramss.exists { sect => sect.exists(_.isImplicit) }
+      )
+    } else CompletionSignature(List.empty, fullName(tpe).underlying, false)
+  }
+
   def locateSymbolPos(sym: Symbol, needPos: PosNeeded): Option[SourcePosition] = {
     _locateSymbolPos(sym, needPos).orElse({
-      logger.debug(s"search $sym: Try Companion")
       sym.companionSymbol match {
         case NoSymbol => None
         case s: Symbol => _locateSymbolPos(s, needPos)
@@ -39,11 +51,11 @@ trait ModelBuilders { self: RichPresentationCompiler =>
     } else {
       // only perform operations is actively requested - this is comparatively expensive
       if (needPos == PosNeededYes) {
-        // we might need this for some Java fqns but we need some evidence
-        // val name = genASM.jsymbol(sym).fullName
-        val name = symbolIndexerName(sym)
-        val hit = search.findUnique(name)
-        logger.debug(s"search: $name = $hit")
+        val fqn = toFqn(sym).fqnString
+        logger.debug(s"$sym ==> $fqn")
+
+        val hit = search.findUnique(fqn)
+        logger.debug(s"search: $fqn = $hit")
         hit.flatMap(LineSourcePositionHelper.fromFqnSymbol(_)(config, vfs)).flatMap { sourcePos =>
           if (sourcePos.file.getName.endsWith(".scala"))
             askLinkPos(sym, AbstractFile.getFile(sourcePos.file)).
@@ -126,13 +138,11 @@ trait ModelBuilders { self: RichPresentationCompiler =>
   object PackageInfo {
     def root: PackageInfo = fromSymbol(RootPackage)
 
-    def fromPath(path: String): PackageInfo = {
-      val pack = packageSymFromPath(path)
-      pack match {
-        case Some(packSym) => fromSymbol(packSym)
-        case None => nullInfo
+    def fromPath(path: String): PackageInfo =
+      toSymbol(PackageName(path.split('.').toList)) match {
+        case NoSymbol => nullInfo
+        case packSym => fromSymbol(packSym)
       }
-    }
 
     val nullInfo = new PackageInfo("NA", "NA", List.empty)
 
@@ -183,30 +193,27 @@ trait ModelBuilders { self: RichPresentationCompiler =>
         val typeSym = tpe.typeSymbol
         val symbolToLocate = if (typeSym.isModuleClass) typeSym.sourceModule else typeSym
         val symPos = locateSymbolPos(symbolToLocate, needPos)
-        new BasicTypeInfo(
-          typeShortName(tpe),
+        BasicTypeInfo(
+          shortName(tpe).underlying,
           declaredAs(typeSym),
-          typeFullName(tpe),
+          fullName(tpe).underlying,
           tpe.typeArgs.map(TypeInfo(_)),
           members,
           symPos
         )
       }
       tpe match {
-        case tpe: MethodType => ArrowTypeInfo(tpe)
-        case tpe: PolyType => ArrowTypeInfo(tpe)
+        case arrow if isArrowType(arrow) => ArrowTypeInfoBuilder(tpe)
         case tpe: NullaryMethodType => basicTypeInfo(tpe.resultType)
         case tpe: Type => basicTypeInfo(tpe)
         case _ => nullInfo
       }
     }
 
-    def nullInfo = {
-      new BasicTypeInfo("NA", DeclaredAs.Nil, "NA", List.empty, List.empty, None)
-    }
+    def nullInfo = BasicTypeInfo("NA", DeclaredAs.Nil, "NA", List.empty, List.empty, None)
   }
 
-  object ParamSectionInfo {
+  object ParamSectionInfoBuilder {
     def apply(params: Iterable[Symbol]): ParamSectionInfo = {
       new ParamSectionInfo(
         params.map { s => (s.nameString, TypeInfo(s.tpe)) },
@@ -225,7 +232,7 @@ trait ModelBuilders { self: RichPresentationCompiler =>
       val nameString = sym.nameString
       val (name, localName) = if (sym.isClass || sym.isTrait || sym.isModule ||
         sym.isModuleClass || sym.isPackageClass) {
-        (typeFullName(tpe), nameString)
+        (fullName(tpe).underlying, nameString)
       } else {
         (nameString, nameString)
       }
@@ -242,30 +249,19 @@ trait ModelBuilders { self: RichPresentationCompiler =>
     }
   }
 
-  object CompletionInfo {
-
-    def apply(
-      name: String,
-      tpeSig: CompletionSignature,
-      isCallable: Boolean,
-      relevance: Int,
-      toInsert: Option[String]
-    ) = new CompletionInfo(
-      name, tpeSig, isCallable, relevance, toInsert
-    )
-
+  object CompletionInfoBuilder {
     def fromSymbol(sym: Symbol, relevance: Int): CompletionInfo =
-      CompletionInfo.fromSymbolAndType(sym, sym.tpe, relevance)
+      fromSymbolAndType(sym, sym.tpe, relevance)
 
-    def fromSymbolAndType(sym: Symbol, tpe: Type, relevance: Int): CompletionInfo = {
+    def fromSymbolAndType(sym: Symbol, tpe: Type, relevance: Int): CompletionInfo =
       CompletionInfo(
+        Some(TypeInfo(tpe)),
         sym.nameString,
         completionSignatureForType(tpe),
         isArrowType(tpe.underlying),
         relevance,
         None
       )
-    }
 
   }
 
@@ -273,31 +269,42 @@ trait ModelBuilders { self: RichPresentationCompiler =>
     def apply(m: TypeMember): NamedTypeMemberInfo = {
       val decl = declaredAs(m.sym)
       val pos = if (m.sym.pos == NoPosition) None else Some(EmptySourcePosition())
-      val signatureString = if (decl == DeclaredAs.Method) Some(m.sym.signatureString) else None
-      new NamedTypeMemberInfo(m.sym.nameString, TypeInfo(m.tpe), pos, signatureString, decl)
+      val descriptor = toFqn(m.sym) match {
+        case MethodName(_, _, desc) => Some(desc.descriptorString)
+        case _ => None
+      }
+      new NamedTypeMemberInfo(m.sym.nameString, TypeInfo(m.tpe), pos, descriptor, decl)
     }
   }
 
-  object ArrowTypeInfo {
-
+  object ArrowTypeInfoBuilder {
     def apply(tpe: Type): ArrowTypeInfo = {
       tpe match {
-        case tpe: MethodType => apply(tpe, tpe.paramss.map(ParamSectionInfo.apply), tpe.finalResultType)
-        case tpe: PolyType => apply(tpe, tpe.paramss.map(ParamSectionInfo.apply), tpe.finalResultType)
+        case args: ArgsTypeRef if args.typeSymbol.fullName.startsWith("scala.Function") =>
+          val tparams = args.args
+          val result = TypeInfo(tparams.last)
+          val params =
+            if (tparams.isEmpty) Nil
+            else tparams.init.zipWithIndex.map { case (tpe, idx) => ("_" + idx, TypeInfo(tpe)) }
+          ArrowTypeInfo(shortName(tpe).underlying, fullName(tpe).underlying, result, ParamSectionInfo(params, isImplicit = false) :: Nil)
+
+        case tpe: MethodType => apply(tpe, tpe.paramss.map(ParamSectionInfoBuilder.apply), tpe.finalResultType)
+        case tpe: PolyType => apply(tpe, tpe.paramss.map(ParamSectionInfoBuilder.apply), tpe.finalResultType)
         case _ => nullInfo()
       }
     }
 
     def apply(tpe: Type, paramSections: List[ParamSectionInfo], finalResultType: Type): ArrowTypeInfo = {
       new ArrowTypeInfo(
-        tpe.toString(),
+        shortName(tpe).underlying,
+        fullName(tpe).underlying,
         TypeInfo(tpe.finalResultType),
         paramSections
       )
     }
 
     def nullInfo() = {
-      new ArrowTypeInfo("NA", TypeInfo.nullInfo, List.empty)
+      new ArrowTypeInfo("NA", "NA", TypeInfo.nullInfo, List.empty)
     }
   }
 }

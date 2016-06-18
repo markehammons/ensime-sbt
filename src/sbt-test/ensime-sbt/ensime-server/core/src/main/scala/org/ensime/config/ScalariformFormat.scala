@@ -21,7 +21,12 @@ trait ScalariformFormat {
         descriptor.preferenceType match {
           case BooleanPreference => sexp.convertTo[Boolean]
           case IntegerPreference(_, _) => sexp.convertTo[Int]
-          case IntentPreference => sexp.convertTo[String]
+          case IntentPreference => sexp.convertTo[String].toLowerCase match {
+            case "preserve" => Preserve
+            case "force" => Force
+            case "prevent" => Prevent
+            case intent => throw new DeserializationException(s"Unknown intent: $intent")
+          }
         }
       }
 
@@ -45,7 +50,7 @@ trait ScalariformFormat {
     ): Sexp = descriptor.preferenceType match {
       case BooleanPreference => value.asInstanceOf[Boolean].toSexp
       case IntegerPreference(_, _) => value.asInstanceOf[Int].toSexp
-      case IntentPreference => value.asInstanceOf[Intent].getClass.getSimpleName.toSexp
+      case IntentPreference => value.getClass.getSimpleName.replaceAll("\\$", "").toLowerCase.toSexp
     }
 
     def write(f: FormattingPreferences) = {

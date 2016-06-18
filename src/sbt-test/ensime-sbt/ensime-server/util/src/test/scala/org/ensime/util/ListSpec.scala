@@ -2,7 +2,7 @@
 // Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.util
 
-import Predef.{ any2stringadd => _, _ => _ }
+import scala.Predef.{ any2stringadd => _, _ }
 
 import org.scalatest._
 
@@ -31,4 +31,8 @@ class ListSpec extends FlatSpec with Matchers {
     tuples.toMultiMapSet shouldEqual multi
   }
 
+  it should "provide distinctBy" in {
+    tuples.distinctBy(_._1) shouldBe List((1, 'a), (2, 'b))
+    tuples.distinctBy(_._2) shouldBe List((1, 'a), (1, 'b), (1, 'c))
+  }
 }

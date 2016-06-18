@@ -42,7 +42,8 @@ trait JavaSourceFinding extends Helpers with SLF4JLogging {
     val javaFqn = fqn(c, path)
     val query = javaFqn.map(_.toFqnString).getOrElse("")
     val hit = search.findUnique(query)
-    log.debug(s"search: '$query' = $hit")
+    if (log.isTraceEnabled())
+      log.trace(s"search: '$query' = $hit")
     hit.flatMap(LineSourcePositionHelper.fromFqnSymbol(_)(config, vfs)).flatMap { sourcePos =>
       if (sourcePos.file.getName.endsWith(".java") && sourcePos.file.exists)
         javaFqn.flatMap(askLinkPos(_, SourceFileInfo(sourcePos.file, None, None))).orElse(Some(sourcePos))

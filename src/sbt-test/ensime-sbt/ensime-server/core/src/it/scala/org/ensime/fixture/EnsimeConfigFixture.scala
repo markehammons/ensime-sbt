@@ -42,7 +42,7 @@ object EnsimeConfigFixture {
   if (!dotEnsime.exists) {
     System.err.println(
       "The .ensime file must exist to run the integration tests." +
-        " Type 'sbt gen-ensime' to create it"
+        " Type 'sbt ensimeConfig' to create it"
     )
     System.err.flush()
     sys.exit(1)
@@ -70,6 +70,14 @@ object EnsimeConfigFixture {
   )
   lazy val TimingTestProject: EnsimeConfig = EnsimeTestProject.copy(
     subprojects = EnsimeTestProject.subprojects.filter(_.name == "testingTiming"),
+    javaLibs = Nil
+  )
+  lazy val MacrosTestProject: EnsimeConfig = EnsimeTestProject.copy(
+    subprojects = EnsimeTestProject.subprojects.filter(_.name == "testingMacros"),
+    javaLibs = Nil
+  )
+  lazy val ShapelessTestProject: EnsimeConfig = EnsimeTestProject.copy(
+    subprojects = EnsimeTestProject.subprojects.filter(_.name == "testingShapeless"),
     javaLibs = Nil
   )
   lazy val DebugTestProject: EnsimeConfig = EnsimeTestProject.copy(

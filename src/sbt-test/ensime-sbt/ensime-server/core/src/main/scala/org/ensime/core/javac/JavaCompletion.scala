@@ -2,25 +2,25 @@
 // Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.core.javac
 
+import java.nio.charset.Charset
+
+import scala.collection.JavaConversions._
+import scala.collection.breakOut
+import scala.collection.mutable.ArrayBuffer
+import scala.concurrent.Await
+import scala.concurrent.duration.Duration
+
 import akka.actor.ActorRef
-import akka.event.slf4j.SLF4JLogging
-import com.sun.source.tree.{ MemberSelectTree, Tree, IdentifierTree }
+import com.sun.source.tree.{ Scope, IdentifierTree, MemberSelectTree, Tree }
 import com.sun.source.util.TreePath
 import javax.lang.model.`type`.TypeMirror
 import javax.lang.model.element.{ Element, ExecutableElement, PackageElement, TypeElement, VariableElement }
 import javax.lang.model.util.ElementFilter
+import org.ensime.api._
 import org.ensime.core.CompletionUtil
 import org.ensime.util.file._
-import org.ensime.api._
-import scala.collection.JavaConversions._
-import java.nio.charset.Charset
-import com.sun.source.tree.Scope
-import scala.collection.mutable.ArrayBuffer;
-import scala.concurrent.Await
-import scala.concurrent.duration.Duration
-import scala.collection.breakOut
 
-trait JavaCompletion extends Helpers with SLF4JLogging {
+trait JavaCompletion { this: JavaCompiler =>
 
   import CompletionUtil._
 
@@ -34,18 +34,12 @@ trait JavaCompletion extends Helpers with SLF4JLogging {
 
     val preceding = s.slice(Math.max(0, offset - 100), offset)
 
-    log.info("PRECEDING: " + preceding)
-
     val defaultPrefix = JavaIdentRegexp.findFirstMatchIn(preceding) match {
       case Some(m) => m.group(1)
       case _ => ""
     }
 
-    log.info("PREFIX: " + defaultPrefix)
-
     val constructing = ConstructingRegexp.findFirstMatchIn(preceding).isDefined
-
-    log.info("CONSTRUCTING: " + constructing)
 
     val indexAfterTarget = Math.max(0, offset - defaultPrefix.length - 1)
 
@@ -174,30 +168,30 @@ trait JavaCompletion extends Helpers with SLF4JLogging {
       }
     }
 
-    var relavence = 0
+    var relevance = 0
     for (tel <- Option(scope.getEnclosingClass())) {
-      addTypeMembers(tel, relavence)
+      addTypeMembers(tel, relevance)
       var t = tel.getEnclosingElement()
       while (t != null) {
         t match {
-          case tel: TypeElement => addTypeMembers(tel, relavence)
+          case tel: TypeElement => addTypeMembers(tel, relevance)
           case _ =>
         }
         t = t.getEnclosingElement()
-        relavence -= 10
+        relevance -= 10
       }
     }
 
-    relavence = 0
+    relevance = 0
     var s = scope
     while (s != null) {
       for (el <- s.getLocalElements()) {
-        for (info <- filterElement(compilation, el, prefix, caseSense, false, constructing, relavence)) {
+        for (info <- filterElement(compilation, el, prefix, caseSense, false, constructing, relevance)) {
           candidates += info
         }
       }
       s = s.getEnclosingScope()
-      relavence -= 10
+      relevance -= 10
     }
     candidates.toList
   }
@@ -230,36 +224,37 @@ trait JavaCompletion extends Helpers with SLF4JLogging {
     }
   }
 
-  private def methodInfo(e: ExecutableElement, relavence: Int): CompletionInfo = {
-    val s = e.getSimpleName.toString
+  private def methodInfo(e: ExecutableElement, relevance: Int): CompletionInfo =
     CompletionInfo(
-      s,
+      Some(methodToTypeInfo(e)),
+      e.getSimpleName.toString,
       CompletionSignature(
         List(e.getParameters().map { p => (p.getSimpleName.toString, p.asType.toString) }.toList),
         e.getReturnType.toString,
         false
       ),
-      true, relavence, None
+      true, relevance, None
     )
-  }
 
-  private def fieldInfo(e: VariableElement, relavence: Int): CompletionInfo = {
+  private def fieldInfo(e: VariableElement, relevance: Int): CompletionInfo = {
     val s = e.getSimpleName.toString
     CompletionInfo(
-      s, CompletionSignature(List(), e.asType.toString, false), false, relavence, None
+      None,
+      s, CompletionSignature(List(), e.asType.toString, false), false, relevance, None
     )
   }
 
-  private def typeInfo(e: TypeElement, relavence: Int): CompletionInfo = {
+  private def typeInfo(e: TypeElement, relevance: Int): CompletionInfo = {
     val s = e.getSimpleName.toString
     CompletionInfo(
-      s, CompletionSignature(List(), e.asType.toString, false), false, relavence, None
+      None,
+      s, CompletionSignature(List(), e.asType.toString, false), false, relevance, None
     )
   }
 
-  private def constructorInfos(compilation: Compilation, e: TypeElement, relavence: Int): List[CompletionInfo] = {
+  private def constructorInfos(compilation: Compilation, e: TypeElement, relevance: Int): List[CompletionInfo] = {
     val s = e.getSimpleName.toString
-    ElementFilter.constructorsIn(compilation.elements.getAllMembers(e)).map(methodInfo(_, relavence)).map { m =>
+    ElementFilter.constructorsIn(compilation.elements.getAllMembers(e)).map(methodInfo(_, relevance)).map { m =>
       m.copy(name = s)
     }.toList
   }

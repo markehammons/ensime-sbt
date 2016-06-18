@@ -15,9 +15,7 @@ object EnsimeBuild extends Build {
   lazy override val settings = super.settings ++ Seq(
     scalaVersion := "2.11.8",
     organization := "org.ensime",
-    version := "0.9.10-SNAPSHOT",
-    resolvers += Resolver.jcenterRepo, // netbeans
-    resolvers += Resolver.sonatypeRepo("snapshots") // scala-refactoring
+    version := "1.0.0-SNAPSHOT"
   )
 
   lazy val commonSettings = Sensible.settings ++ Seq(
@@ -40,7 +38,7 @@ object EnsimeBuild extends Build {
       "org.apache.lucene" % "lucene-core" % luceneVersion
     ),
 
-    EnsimeKeys.ensimeScalariform := ScalariformKeys.preferences.value
+    EnsimeKeys.scalariform := ScalariformKeys.preferences.value
 
   // https://github.com/sbt/sbt/issues/2459 --- misses shapeless in core/it:test
   // updateOptions := updateOptions.value.withCachedResolution(true)
@@ -61,20 +59,20 @@ object EnsimeBuild extends Build {
   lazy val monkeys = Project("monkeys", file("monkeys")) settings (commonSettings) settings (
     libraryDependencies ++= Seq(
       "org.scala-lang" % "scala-compiler" % scalaVersion.value,
-      "org.apache.commons" % "commons-vfs2" % "2.0" exclude ("commons-logging", "commons-logging")
+      "org.apache.commons" % "commons-vfs2" % "2.1" exclude ("commons-logging", "commons-logging")
     )
   )
 
   lazy val util = Project("util", file("util")) settings (commonSettings) settings (
     libraryDependencies ++= List(
-      "org.apache.commons" % "commons-vfs2" % "2.0" exclude ("commons-logging", "commons-logging")
+      "org.apache.commons" % "commons-vfs2" % "2.1" exclude ("commons-logging", "commons-logging")
     ) ++ Sensible.guava
   )
 
   lazy val testutil = Project("testutil", file("testutil")) settings (commonSettings) dependsOn (
     util, api
   ) settings (
-      libraryDependencies += "commons-io" % "commons-io" % "2.4",
+      libraryDependencies += "commons-io" % "commons-io" % "2.5",
       libraryDependencies ++= Sensible.testLibs("compile")
     )
 
@@ -83,7 +81,7 @@ object EnsimeBuild extends Build {
     testutil % "test"
   ) settings (
       libraryDependencies ++= Seq(
-        "org.parboiled" %% "parboiled" % "2.1.2"
+        "org.parboiled" %% "parboiled" % "2.1.2" // 2.1.3 doesn't have a _2.10
       ) ++ Sensible.shapeless(scalaVersion.value)
     )
 
@@ -130,15 +128,18 @@ object EnsimeBuild extends Build {
     // test config needed to get the test jar
     testingSimpleJar % "test,it->test",
     testingTiming % "test,it",
+    testingMacros % "test, it",
+    testingShapeless % "test,it",
     testingDebug % "test,it",
     testingJava % "test,it"
   ).configs(It).settings(
       commonSettings, commonItSettings
     ).settings(
       unmanagedJars in Compile += JavaTools,
-      EnsimeKeys.ensimeUnmanagedSourceArchives += file(".").getCanonicalFile / "openjdk-langtools/openjdk6-langtools-src.zip",
+      EnsimeKeys.ensimeUnmanagedSourceArchives += (baseDirectory in ThisBuild).value / "openjdk-langtools/openjdk6-langtools-src.zip",
       libraryDependencies ++= Seq(
-        "com.h2database" % "h2" % "1.4.191",
+        "org.ensime" %% "java7-file-watcher" % "1.0.0",
+        "com.h2database" % "h2" % "1.4.191", // 1.4.192 uses Java 7
         "com.typesafe.slick" %% "slick" % "3.1.1",
         "com.zaxxer" % "HikariCP-java6" % "2.3.13",
         // lucene 4.8+ needs Java 7: http://www.gossamer-threads.com/lists/lucene/general/225300
@@ -150,9 +151,14 @@ object EnsimeBuild extends Build {
         "org.scala-lang" % "scalap" % scalaVersion.value,
         "com.typesafe.akka" %% "akka-actor" % Sensible.akkaVersion,
         "com.typesafe.akka" %% "akka-slf4j" % Sensible.akkaVersion,
-        "org.scala-refactoring" %% "org.scala-refactoring.library" % "0.10.0-SNAPSHOT",
+        scalaBinaryVersion.value match {
+          // see notes in https://github.com/ensime/ensime-server/pull/1446
+          case "2.10" => "org.scala-refactoring" % "org.scala-refactoring.library_2.10.6" % "0.10.0"
+          case "2.11" => "org.scala-refactoring" % "org.scala-refactoring.library_2.11.8" % "0.10.0"
+        },
         "commons-lang" % "commons-lang" % "2.6",
-        "com.googlecode.java-diff-utils" % "diffutils" % "1.3.0"
+        "com.googlecode.java-diff-utils" % "diffutils" % "1.3.0",
+        "org.scala-debugger" %% "scala-debugger-api" % "1.1.0-M1"
       ) ++ Sensible.testLibs("it,test") ++ Sensible.shapeless(scalaVersion.value)
     ) enablePlugins BuildInfoPlugin settings (
         buildInfoPackage := organization.value,
@@ -204,6 +210,15 @@ object EnsimeBuild extends Build {
 
   lazy val testingTiming = Project("testingTiming", file("testing/timing"))
 
+  lazy val testingMacros = Project("testingMacros", file("testing/macros")) settings (
+    libraryDependencies += "org.scala-lang" % "scala-reflect" % scalaVersion.value
+  )
+
+  // just to have access to shapeless
+  lazy val testingShapeless = Project("testingShapeless", file("testing/shapeless")).settings (
+    libraryDependencies ++= Sensible.shapeless(scalaVersion.value)
+  )
+
   lazy val testingDebug = Project("testingDebug", file("testing/debug")).settings(
     scalacOptions in Compile := Seq()
   )
@@ -212,7 +227,7 @@ object EnsimeBuild extends Build {
     dependencyOverrides ++= Set("com.google.guava" % "guava" % "18.0"),
     libraryDependencies ++= Seq(
       "com.github.dvdme" % "ForecastIOLib" % "1.5.1" intransitive (),
-      "commons-io" % "commons-io" % "2.4" intransitive ()
+      "commons-io" % "commons-io" % "2.5" intransitive ()
     ) ++ Sensible.guava
   )
 

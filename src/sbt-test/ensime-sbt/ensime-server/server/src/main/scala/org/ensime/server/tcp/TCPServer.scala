@@ -7,8 +7,8 @@ import java.net.InetSocketAddress
 
 import akka.actor.{ Actor, ActorLogging, ActorRef }
 import akka.io.{ IO, Tcp }
-import org.ensime.core.Protocol
-import org.ensime.server.{ ShutdownRequest, PortUtil }
+import org.ensime.core.{ ShutdownRequest, Protocol }
+import org.ensime.server.PortUtil
 
 case object ClientConnectionClosed
 

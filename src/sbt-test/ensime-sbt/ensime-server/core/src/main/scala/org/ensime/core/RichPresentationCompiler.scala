@@ -41,19 +41,9 @@ package org.ensime.core
 import java.io.File
 import java.nio.charset.Charset
 
-import org.ensime.api._
-import org.ensime.config._
-
-import akka.actor.ActorRef
-import org.ensime.vfs._
-import org.ensime.indexer.SearchService
-import org.ensime.model._
-import org.slf4j.LoggerFactory
-
 import scala.collection.mutable
 import scala.reflect.internal.util.{ BatchSourceFile, RangePosition, SourceFile }
 import scala.reflect.io.PlainFile
-
 import scala.tools.nsc.Settings
 import scala.tools.nsc.interactive.{ CompilerControl, Global }
 import scala.tools.nsc.io.AbstractFile
@@ -61,7 +51,14 @@ import scala.tools.nsc.reporters.Reporter
 import scala.tools.nsc.util._
 import scala.tools.refactoring.analysis.GlobalIndexes
 
+import akka.actor.ActorRef
+import org.ensime.api._
+import org.ensime.config._
+import org.ensime.indexer._
+import org.ensime.model._
 import org.ensime.util.file._
+import org.ensime.vfs._
+import org.slf4j.LoggerFactory
 
 trait RichCompilerControl extends CompilerControl with RefactoringControl with CompletionControl with DocFinding {
   self: RichPresentationCompiler =>
@@ -95,22 +92,40 @@ trait RichCompilerControl extends CompilerControl with RefactoringControl with C
   def askDocSignatureForSymbol(typeFullName: String, memberName: Option[String],
     signatureString: Option[String]): Option[DocSigPair] =
     askOption {
-      symbolMemberByName(
-        typeFullName, memberName, signatureString
-      ).flatMap(docSignature(_, None))
+      val sym = symbolMemberByName(typeFullName, memberName, signatureString)
+      docSignature(sym, None)
     }.flatten
+
+  ////////////////////////////////////////////////////////////////////////////////
+  // exposed for testing
+  def askSymbolFqn(p: Position): Option[FullyQualifiedName] =
+    askOption(symbolAt(p).map(toFqn)).flatten
+  def askTypeFqn(p: Position): Option[FullyQualifiedName] =
+    askOption(typeAt(p).map { tpe => toFqn(tpe.typeSymbol) }).flatten
+  def askSymbolByScalaName(name: String): Option[Symbol] =
+    askOption(toSymbol(name))
+  def askSymbolByFqn(fqn: FullyQualifiedName): Option[Symbol] =
+    askOption(toSymbol(fqn))
+  def askSymbolAt(p: Position): Option[Symbol] =
+    askOption(symbolAt(p)).flatten
+  def askTypeSymbolAt(p: Position): Option[Symbol] =
+    askOption(typeAt(p).map { tpe => tpe.typeSymbol }).flatten
+
+  ////////////////////////////////////////////////////////////////////////////////
 
   def askSymbolInfoAt(p: Position): Option[SymbolInfo] =
     askOption(symbolAt(p).map(SymbolInfo(_))).flatten
 
   def askSymbolByName(fqn: String, memberName: Option[String], signatureString: Option[String]): Option[SymbolInfo] =
-    askOption(symbolMemberByName(fqn, memberName, signatureString).map(SymbolInfo(_))).flatten
+    askOption {
+      SymbolInfo(symbolMemberByName(fqn, memberName, signatureString))
+    }
 
   def askTypeInfoAt(p: Position): Option[TypeInfo] =
     askOption(typeAt(p).map(TypeInfo(_, PosNeededYes))).flatten
 
   def askTypeInfoByName(name: String): Option[TypeInfo] =
-    askOption(typeByName(name).map(TypeInfo(_, PosNeededYes))).flatten
+    askOption(TypeInfo(toSymbol(name).tpe, PosNeededYes))
 
   def askTypeInfoByNameAt(name: String, p: Position): Option[TypeInfo] = {
     val nameSegs = name.split("\\.")
@@ -124,7 +139,7 @@ trait RichCompilerControl extends CompilerControl with RefactoringControl with C
           members, firstName, matchEntire = true, caseSens = true
         ).map { _.sym }
         val restOfPath = nameSegs.drop(1).mkString(".")
-        val syms = roots.flatMap { symbolByName(restOfPath, _) }
+        val syms = roots.map { toSymbol(restOfPath, _) }
         syms.find(_.tpe != NoType).map { sym => TypeInfo(sym.tpe) }
       }
     ) yield infos).flatten
@@ -174,7 +189,7 @@ trait RichCompilerControl extends CompilerControl with RefactoringControl with C
     askOption(inspectTypeAt(p)).flatten
 
   def askInspectTypeByName(name: String): Option[TypeInspectInfo] =
-    askOption(typeByName(name).map(inspectType)).flatten
+    askOption(inspectType(toSymbol(name).tpe))
 
   def askCompletePackageMember(path: String, prefix: String): List[CompletionInfo] =
     askOption(completePackageMember(path, prefix)).getOrElse(List.empty)
@@ -263,7 +278,10 @@ class RichPresentationCompiler(
     with ModelBuilders with RichCompilerControl
     with RefactoringImpl with Completion with Helpers
     with PresentationCompilerBackCompat with PositionBackCompat
-    with StructureViewBuilder {
+    with StructureViewBuilder
+    with SymbolToFqn
+    with FqnToSymbol
+    with TypeToScalaName {
 
   val logger = LoggerFactory.getLogger(this.getClass)
 
@@ -410,29 +428,16 @@ class RichPresentationCompiler(
     }
   }
 
-  protected def typeByName(name: String): Option[Type] =
-    symbolByName(name).flatMap {
-      case NoSymbol => None
-      case sym: Symbol => sym.tpe match {
-        case NoType => None
-        case tpe: Type => Some(tpe)
-      }
-    }
-
   protected def symbolMemberByName(
-    fqn: String, memberName: Option[String], signatureString: Option[String]
-  ): Option[Symbol] = {
-    symbolByName(fqn).flatMap { owner =>
-      memberName.flatMap { rawName =>
-        val module = rawName.endsWith("$")
-        val nm = if (module) rawName.dropRight(1) else rawName
-        val candidates = owner.info.members.filter { s =>
-          s.nameString == nm && ((module && s.isModule) || (!module && (!s.isModule || s.hasPackageFlag)))
-        }
-        val exact = signatureString.flatMap { s => candidates.find(_.signatureString == s) }
-        exact.orElse(candidates.headOption)
-      }.orElse(Some(owner))
+    name: String, member: Option[String], descriptor: Option[String]
+  ): Symbol = {
+    val clazz = ClassName.fromFqn(name)
+    val fqn = (member, descriptor) match {
+      case (Some(field), None) => FieldName(clazz, field)
+      case (Some(method), Some(desc)) => MethodName(clazz, method, DescriptorParser.parse(desc))
+      case _ => clazz
     }
+    toSymbol(fqn)
   }
 
   protected def filterMembersByPrefix(members: List[Member], prefix: String,
@@ -447,14 +452,12 @@ class RichPresentationCompiler(
   }
 
   private def noDefinitionFound(tree: Tree) = {
-    logger.warn("No definition found. Please report to https://github.com/ensime/ensime-server/issues/492 with description of what did you expected. symbolAt for " + tree.getClass + ": " + tree)
+    logger.warn("No definition found. Please report to https://github.com/ensime/ensime-server/issues/492 what you expected for " + tree.getClass + ": " + showRaw(tree))
     Nil
   }
 
   protected def symbolAt(pos: Position): Option[Symbol] = {
     val tree = wrapTypedTreeAt(pos)
-    // This code taken mostly verbatim from Scala IDE sources. Licensed
-    // under SCALA LICENSE.
     val wannabes =
       tree match {
         case Import(expr, selectors) =>
@@ -481,8 +484,10 @@ class RichPresentationCompiler(
           // List(qualifier.symbol, ap.symbol)
           List(qualifier.symbol)
         case st if st.symbol ne null =>
-          logger.debug("using symbol of " + tree.getClass + " tree")
           List(st.symbol)
+        case lit: Literal =>
+          List(lit.tpe.typeSymbol)
+
         case _ =>
           noDefinitionFound(tree)
       }

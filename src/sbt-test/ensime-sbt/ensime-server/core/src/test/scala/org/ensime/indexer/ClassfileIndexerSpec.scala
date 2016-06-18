@@ -2,12 +2,12 @@
 // Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.indexer
 
+import scala.collection.immutable.Queue
+
 import akka.event.slf4j.SLF4JLogging
 import org.ensime.fixture.IsolatedEnsimeVFSFixture
 import org.ensime.util.EnsimeSpec
 import org.ensime.vfs._
-
-import scala.collection.immutable.Queue
 
 class ClassfileIndexerSpec extends EnsimeSpec with IsolatedEnsimeVFSFixture {
 
@@ -25,9 +25,12 @@ class ClassfileIndexerSpec extends EnsimeSpec with IsolatedEnsimeVFSFixture {
     clazz.fields shouldBe Queue()
     clazz.methods shouldBe Queue(
       RawMethod(
-        name = MemberName(ClassName(PackageName(List()), "Test"), "main"),
+        name = MethodName(
+          ClassName(PackageName(List()), "Test"),
+          "main",
+          Descriptor(List(ArrayDescriptor(ClassName(PackageName(List("java", "lang")), "String"))), ClassName(PackageName(List()), "void"))
+        ),
         access = Public,
-        descriptor = Descriptor(List(ArrayDescriptor(ClassName(PackageName(List("java", "lang")), "String"))), ClassName(PackageName(List()), "void")),
         generics = None,
         line = Some(4)
       )
@@ -37,10 +40,10 @@ class ClassfileIndexerSpec extends EnsimeSpec with IsolatedEnsimeVFSFixture {
     refs shouldBe Set(
       ClassName(PackageName(List()), "void"),
       ClassName(PackageName(List("java", "lang")), "Object"),
-      MemberName(ClassName(PackageName(List("java", "lang")), "System"), "out"),
+      FieldName(ClassName(PackageName(List("java", "lang")), "System"), "out"),
       ClassName(PackageName(List("java", "lang")), "Object"),
       ClassName(PackageName(List("java", "io")), "PrintStream"),
-      MemberName(ClassName(PackageName(List("java", "io")), "PrintStream"), "print"),
+      FieldName(ClassName(PackageName(List("java", "io")), "PrintStream"), "print"),
       ClassName(PackageName(List("java", "lang")), "String")
     )
   }
@@ -66,4 +69,17 @@ class ClassfileIndexerSpec extends EnsimeSpec with IsolatedEnsimeVFSFixture {
     val (clazz, refs) = indexClassfile(vfs.vres("scala/collection/immutable/List$.class"))
     clazz.name shouldBe ClassName(PackageName(List("scala", "collection", "immutable")), "List$")
   }
+
+  it should "support method overloading" in withVFS { implicit vfs =>
+    val (clazz, _) = indexClassfile(vfs.vres("java/nio/channels/FileChannel.class"))
+    val methods = clazz.methods.filter { ref => ref.name.fqnString.startsWith("java.nio.channels.FileChannel.write") }
+
+    methods.map(_.name.fqnString) should contain theSameElementsAs List(
+      "java.nio.channels.FileChannel.write(Ljava/nio/ByteBuffer;)I",
+      "java.nio.channels.FileChannel.write([Ljava/nio/ByteBuffer;II)J",
+      "java.nio.channels.FileChannel.write([Ljava/nio/ByteBuffer;)J",
+      "java.nio.channels.FileChannel.write(Ljava/nio/ByteBuffer;J)I"
+    )
+  }
+
 }

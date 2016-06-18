@@ -124,7 +124,6 @@ class DocResolver(
   private def resolveLocalUri(sig: DocSigPair): Option[String] = {
     guessJar(sig) match {
       case Some((jar, sig)) =>
-        log.debug(s"Resolved to jar: $jar")
         Some(makeLocalUri(jar, sig))
       case _ =>
         log.debug(s"Failed to resolve doc jar for: $sig")
@@ -136,7 +135,7 @@ class DocResolver(
   // url characters: parens, commas, brackets.
   // See https://bugs.eclipse.org/bugs/show_bug.cgi?id=432056
   // and https://bugs.openjdk.java.net/browse/JDK-8025633
-  private val Java8Chars = """(?:, |\(|\)|\[\])""".r
+  private val Java8Chars = """(?:,|\(|\)|\[\])""".r
   private def toJava8Anchor(anchor: String): String = {
     Java8Chars.replaceAllIn(anchor, { m =>
       anchor(m.start) match {

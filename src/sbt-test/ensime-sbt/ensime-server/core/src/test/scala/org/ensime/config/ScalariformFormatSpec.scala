@@ -15,11 +15,13 @@ class ScalariformFormatSpec extends EnsimeSpec {
 
   val prefs = FormattingPreferences().
     setPreference(DoubleIndentClassDeclaration, true).
-    setPreference(IndentSpaces, 13)
+    setPreference(IndentSpaces, 13).
+    setPreference(DanglingCloseParenthesis, Preserve)
 
   "ScalariformFormat" should "parse some example config" in {
     val text = """(:doubleIndentClassDeclaration t
-                     :indentSpaces 13)"""
+                     :indentSpaces 13
+                     :danglingCloseParenthesis "preserve")"""
     val recover = text.parseSexp.convertTo[FormattingPreferences]
     recover.preferencesMap shouldBe prefs.preferencesMap
   }
@@ -27,7 +29,9 @@ class ScalariformFormatSpec extends EnsimeSpec {
   it should "create valid output" in {
     prefs.toSexp should ===(SexpList(
       SexpSymbol(":doubleIndentClassDeclaration"), SexpSymbol("t"),
-      SexpSymbol(":indentSpaces"), SexpNumber(13)
+      SexpSymbol(":indentSpaces"), SexpNumber(13),
+      SexpSymbol(":danglingCloseParenthesis"), SexpString("preserve")
     ))
   }
+
 }

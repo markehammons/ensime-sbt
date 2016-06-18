@@ -39,16 +39,17 @@
  */
 package org.ensime.core
 
+import scala.collection.mutable
+import scala.concurrent.{ Await, Future }
+import scala.concurrent.duration._
+import scala.reflect.internal.util.{ BatchSourceFile, SourceFile }
+
 import akka.actor.ActorRef
 import akka.pattern.Patterns
 import akka.util.Timeout
 import org.ensime.api._
+import org.ensime.indexer.PackageName
 import org.ensime.indexer.lucene.SimpleLucene
-
-import scala.collection.mutable
-import scala.concurrent.duration._
-import scala.concurrent.{ Await, Future }
-import scala.reflect.internal.util.{ BatchSourceFile, SourceFile }
 
 trait CompletionControl {
   self: RichPresentationCompiler =>
@@ -124,7 +125,8 @@ trait CompletionControl {
 
       val contextOpt = x.get match {
         case Left(tree) =>
-          logger.debug("Completing at tree:" + tree.summaryString)
+          if (logger.isTraceEnabled())
+            logger.trace("Completing at tree:" + tree.summaryString)
           tree match {
             case Apply(fun, _) =>
               fun match {
@@ -193,16 +195,16 @@ trait CompletionControl {
         sym.owner != definitions.AnyRefClass &&
         sym.owner != definitions.ObjectClass) score += 30
 
-      val infos = List(CompletionInfo.fromSymbolAndType(sym, tpe, score))
+      val infos = List(CompletionInfoBuilder.fromSymbolAndType(sym, tpe, score))
 
       if (context.constructing) {
         val constructorSyns = constructorSynonyms(sym).map {
-          c => CompletionInfo.fromSymbolAndType(sym, c.tpe, score + 50)
+          c => CompletionInfoBuilder.fromSymbolAndType(sym, c.tpe, score + 50)
         }
         infos ++ constructorSyns
       } else {
         val applySyns = applySynonyms(sym).map {
-          c => CompletionInfo.fromSymbolAndType(sym, c.tpe, score)
+          c => CompletionInfoBuilder.fromSymbolAndType(sym, c.tpe, score)
         }
         infos ++ applySyns
       }
@@ -236,8 +238,6 @@ trait CompletionControl {
       }
     } while (!x.isComplete)
 
-    logger.info("Found " + members.size + " members.")
-
     // Any interaction with the members (their types and symbols) must be done
     // on the compiler thread.
     askOption[Unit] {
@@ -245,7 +245,6 @@ trait CompletionControl {
         val s = m.sym.nameString
         matchesPrefix(s, context.prefix, matchEntire = false, caseSens = caseSens) && !s.contains("$")
       }
-      logger.info("Filtered down to " + filtered.size + ".")
       for (m <- filtered) {
         m match {
           case m @ ScopeMember(sym, tpe, accessible, viaView) =>
@@ -322,24 +321,27 @@ object Keywords {
     "yield"
   )
 
-  val keywordCompletions = keywords map {
-    CompletionInfo(_, CompletionSignature(List(), "", hasImplicit = false), false, 100, None)
+  val keywordCompletions = keywords map { keyword =>
+    CompletionInfo(None, keyword, CompletionSignature(Nil, "", hasImplicit = false), false, 100, None)
   }
 }
 
 trait Completion { self: RichPresentationCompiler =>
 
   def completePackageMember(path: String, prefix: String): List[CompletionInfo] = {
-    packageSymFromPath(path) match {
-      case Some(sym) =>
+    toSymbol(PackageName(path.split('.').toList)) match {
+      case NoSymbol => List.empty
+      case sym =>
         val memberSyms = packageMembers(sym).filterNot { s =>
           s == NoSymbol || s.nameString.contains("$")
         }
         memberSyms.flatMap { s =>
-          val name = if (s.hasPackageFlag) { s.nameString } else { typeShortName(s) }
-          if (name.startsWith(prefix)) Some(CompletionInfo(name, CompletionSignature(List.empty, "", false), isCallable = false, 50, None)) else None
+          val name = if (s.hasPackageFlag) { s.nameString } else { shortName(s).underlying }
+          if (name.startsWith(prefix))
+            Some(CompletionInfo(None, name, CompletionSignature(Nil, "", false), isCallable = false, 50, None))
+          else
+            None
         }.toList.sortBy(ci => (ci.relevance, ci.name))
-      case _ => List.empty
     }
   }
 
@@ -372,6 +374,7 @@ object CompletionUtil {
       case s: SymbolSearchResults =>
         s.syms.map { s =>
           CompletionInfo(
+            None,
             s.localName, CompletionSignature(List.empty, s.name, false),
             isCallable = false, 40, None
           )

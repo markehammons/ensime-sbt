@@ -4,22 +4,41 @@ package org.ensime.fixture
 
 import java.io.File
 
+import scala.collection.immutable.Queue
+import scala.tools.nsc.Settings
+import scala.tools.nsc.interactive.Global
+
 import akka.actor.ActorSystem
 import akka.testkit.TestProbe
 import org.ensime.api._
-import org.ensime.vfs._
 import org.ensime.core._
 import org.ensime.indexer._
+import org.ensime.util.{ PresentationReporter, ReportHandler }
+import org.ensime.vfs._
 import org.slf4j.LoggerFactory
-
-import scala.tools.nsc.Settings
-import scala.tools.nsc.interactive.Global
-import scala.tools.nsc.reporters.StoreReporter
 
 trait RichPresentationCompilerFixture {
   def withRichPresentationCompiler(
     testCode: (TestKitFix, EnsimeConfig, RichPresentationCompiler) => Any
   ): Any
+}
+
+final class TestReporter(
+  val handler: TestReportHandler = new TestReportHandler
+) extends PresentationReporter(handler)
+final class TestReportHandler extends ReportHandler {
+  var messages = Queue.empty[String]
+  override def messageUser(str: String): Unit = {
+    messages = messages enqueue str
+  }
+  var clears = 0
+  override def clearAllScalaNotes(): Unit = {
+    clears += 1
+  }
+  @volatile var notes = Queue.empty[Note]
+  override def reportScalaNotes(list: List[Note]): Unit = {
+    notes = notes enqueue list
+  }
 }
 
 object RichPresentationCompilerFixture {
@@ -42,7 +61,7 @@ object RichPresentationCompilerFixture {
     settings.bootclasspath.append(scalaLib.getAbsolutePath)
     settings.classpath.value = config.compileClasspath.mkString(File.pathSeparator)
 
-    val reporter = new StoreReporter()
+    val reporter = new TestReporter
     val indexer = TestProbe()
     val parent = TestProbe()
 

@@ -4,26 +4,26 @@ package org.ensime.indexer
 
 import java.io.{ File, FileNotFoundException }
 
+import scala.collection.JavaConversions._
+
 import akka.event.slf4j.SLF4JLogging
 import org.apache.commons.vfs2.FileObject
-import org.apache.lucene.document.Field.Store
 import org.apache.lucene.document.{ Document, TextField }
+import org.apache.lucene.document.Field.Store
 import org.apache.lucene.index.Term
-import org.apache.lucene.search.BooleanClause.Occur
 import org.apache.lucene.search.{ BooleanQuery, DisjunctionMaxQuery, PrefixQuery, TermQuery }
-import org.ensime.indexer.DatabaseService._
+import org.apache.lucene.search.BooleanClause.Occur
+import org.ensime.indexer.database.DatabaseService._
 import org.ensime.indexer.lucene._
-
 import org.ensime.util.list._
-
-import scala.collection.JavaConversions._
+import shapeless.Typeable
 
 object IndexService extends SLF4JLogging {
 
   class FqnAnalyzer extends DynamicSynonymAnalyzer {
     private def cases(s: String) = List(s, s.toLowerCase)
     def synonyms(term: String): Set[String] = {
-      val (path, name) = term.split('.').toList.initLast
+      val (path, name) = term.replaceAll("\\(.*", "").split('.').toList.initLast
       def camel(s: String) = s.filter(_.isUpper)
       def spacey(s: String) = List(s, s.replace('.', ' '))
 
@@ -43,18 +43,18 @@ object IndexService extends SLF4JLogging {
   final case class MethodIndex(fqn: String, file: Option[FileCheck]) extends FqnIndex
   final case class FieldIndex(fqn: String, file: Option[FileCheck]) extends FqnIndex
   abstract class AFqnIndexS[T <: FqnIndex](
-      clazz: Class[T],
+      tpe: Typeable[T],
       cons: (String, Option[FileCheck]) => T
-  ) extends EntityS(clazz) {
+  ) extends EntityS(tpe) {
     def addFields(doc: Document, i: T): Unit = {
       doc.add(new TextField("file", i.file.get.filename, Store.NO))
       doc.add(new TextField("fqn", i.fqn, Store.YES))
     }
     def toEntity(d: Document): T = cons(d.get("fqn"), None)
   }
-  implicit object ClassIndexS extends AFqnIndexS(classOf[ClassIndex], ClassIndex)
-  implicit object MethodIndexS extends AFqnIndexS(classOf[MethodIndex], MethodIndex)
-  implicit object FieldIndexS extends AFqnIndexS(classOf[FieldIndex], FieldIndex)
+  implicit object ClassIndexS extends AFqnIndexS(Typeable[ClassIndex], ClassIndex)
+  implicit object MethodIndexS extends AFqnIndexS(Typeable[MethodIndex], MethodIndex)
+  implicit object FieldIndexS extends AFqnIndexS(Typeable[FieldIndex], FieldIndex)
   implicit object FqnIndexS extends DocumentRecovery[FqnIndex] {
     def toEntity(d: Document) = d.get("TYPE") match {
       case "ClassIndex" => ClassIndexS.toEntity(d)
@@ -87,12 +87,12 @@ class IndexService(path: File) {
   def persist(check: FileCheck, symbols: List[FqnSymbol], commit: Boolean, boost: Boolean): Unit = {
     val f = Some(check)
     val fqns: List[Document] = symbols.map {
-      case FqnSymbol(_, _, _, fqn, Some(_), _, _, _, _) => MethodIndex(fqn, f).toDocument
-      case FqnSymbol(_, _, _, fqn, _, Some(_), _, _, _) => FieldIndex(fqn, f).toDocument
-      case FqnSymbol(_, _, _, fqn, _, _, _, _, _) => ClassIndex(fqn, f).toDocument
+      case FqnSymbol(_, _, _, fqn, _, _, _, _) if fqn.contains("(") => MethodIndex(fqn, f).toDocument
+      case FqnSymbol(_, _, _, fqn, Some(_), _, _, _) => FieldIndex(fqn, f).toDocument
+      case FqnSymbol(_, _, _, fqn, _, _, _, _) => ClassIndex(fqn, f).toDocument
     }
     if (boost) {
-      fqns foreach { _.boostText("fqn", 1.1f) }
+      fqns foreach { _.boostText("fqn", 1.3f) }
     }
 
     lucene.create(fqns, commit)

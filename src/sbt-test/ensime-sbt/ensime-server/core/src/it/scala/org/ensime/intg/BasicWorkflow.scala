@@ -41,10 +41,10 @@ class BasicWorkflow extends EnsimeSpec
           expectMsg(VoidResponse)
 
           project ! TypeByNameReq("org.example.Bloo")
-          expectMsg(FalseResponse)
+          expectMsg(BasicTypeInfo("<none>", DeclaredAs.Nil, "<none>", Nil, Nil, None))
 
           // trigger typeCheck
-          project ! TypecheckFilesReq(List(Left(fooFile)))
+          project ! TypecheckFilesReq(List(Left(fooFile), Left(barFile)))
           expectMsg(VoidResponse)
 
           asyncHelper.expectMsg(FullTypeCheckCompleteEvent)
@@ -115,8 +115,6 @@ class BasicWorkflow extends EnsimeSpec
           //-----------------------------------------------------------------------------------------------
           // uses of symbol at point
 
-          log.info("------------------------------------222-")
-
           project ! TypecheckFilesReq(List(Left(fooFile)))
           expectMsg(VoidResponse)
 
@@ -127,52 +125,50 @@ class BasicWorkflow extends EnsimeSpec
             ERangePosition(`fooFilePath`, 114, 110, 172), ERangePosition(`fooFilePath`, 273, 269, 283)
           )
 
-          log.info("------------------------------------222-")
-
           // note that the line numbers appear to have been stripped from the
           // scala library classfiles, so offset/line comes out as zero unless
           // loaded by the pres compiler
           project ! SymbolAtPointReq(Left(fooFile), 276)
           expectMsgPF() {
-            case SymbolInfo("testMethod", "testMethod", Some(OffsetSourcePosition(`fooFile`, 114)), ArrowTypeInfo("(i: Int, s: String)Int", BasicTypeInfo("Int", DeclaredAs.Class, "scala.Int", List(), List(), None), List(ParamSectionInfo(List((i, BasicTypeInfo("Int", DeclaredAs.Class, "scala.Int", List(), List(), None)), (s, BasicTypeInfo("String", DeclaredAs.Class, "java.lang.String", List(), List(), None))), false))), true) =>
+            case SymbolInfo("testMethod", "testMethod", Some(OffsetSourcePosition(`fooFile`, 114)), ArrowTypeInfo("(Int, String) => Int", "(scala.Int, java.lang.String) => scala.Int", BasicTypeInfo("Int", DeclaredAs.Class, "scala.Int", Nil, Nil, None), List(ParamSectionInfo(List(("i", BasicTypeInfo("Int", DeclaredAs.Class, "scala.Int", Nil, Nil, None)), (s, BasicTypeInfo("String", DeclaredAs.Class, "java.lang.String", Nil, Nil, None))), false))), true) =>
           }
 
           // M-.  external symbol
           project ! SymbolAtPointReq(Left(fooFile), 190)
           expectMsgPF() {
             case SymbolInfo("Map", "Map", Some(OffsetSourcePosition(_, _)),
-              BasicTypeInfo("Map$", DeclaredAs.Object, "scala.collection.immutable.Map$", List(), List(), None),
+              BasicTypeInfo("Map", DeclaredAs.Object, "scala.collection.immutable.Map", Nil, Nil, None),
               false) =>
           }
 
           project ! SymbolAtPointReq(Left(fooFile), 343)
           expectMsgPF() {
             case SymbolInfo("fn", "fn", Some(OffsetSourcePosition(`fooFile`, 304)),
-              BasicTypeInfo("Function1", DeclaredAs.Trait, "scala.Function1",
+              BasicTypeInfo("(String) => Int", DeclaredAs.Trait, "(java.lang.String) => scala.Int",
                 List(
-                  BasicTypeInfo("String", DeclaredAs.Class, "java.lang.String", List(), List(), None),
-                  BasicTypeInfo("Int", DeclaredAs.Class, "scala.Int", List(), List(), None)),
-                List(), None),
+                  BasicTypeInfo("String", DeclaredAs.Class, "java.lang.String", Nil, Nil, None),
+                  BasicTypeInfo("Int", DeclaredAs.Class, "scala.Int", Nil, Nil, None)),
+                Nil, None),
               false) =>
           }
 
           project ! SymbolAtPointReq(Left(barFile), 150)
           expectMsgPF() {
             case SymbolInfo("apply", "apply", Some(OffsetSourcePosition(`barFile`, 59)),
-              ArrowTypeInfo("(bar: String, baz: Int)org.example.Bar.Foo",
-                BasicTypeInfo("Foo", DeclaredAs.Class, "org.example.Bar$$Foo", List(), List(), None),
+              ArrowTypeInfo("(String, Int) => Foo", "(java.lang.String, scala.Int) => org.example.Bar.Foo",
+                BasicTypeInfo("Foo", DeclaredAs.Class, "org.example.Bar.Foo", Nil, Nil, None),
                 List(ParamSectionInfo(
                   List(
-                    ("bar", BasicTypeInfo("String", DeclaredAs.Class, "java.lang.String", List(), List(), None)),
-                    ("baz", BasicTypeInfo("Int", DeclaredAs.Class, "scala.Int", List(), List(), None))), false))),
+                    ("bar", BasicTypeInfo("String", DeclaredAs.Class, "java.lang.String", Nil, Nil, None)),
+                    ("baz", BasicTypeInfo("Int", DeclaredAs.Class, "scala.Int", Nil, Nil, None))), false))),
               true) =>
           }
 
           project ! SymbolAtPointReq(Left(barFile), 193)
           expectMsgPF() {
             case SymbolInfo("copy", "copy", Some(OffsetSourcePosition(`barFile`, 59)),
-              ArrowTypeInfo("(bar: String, baz: Int)org.example.Bar.Foo",
-                BasicTypeInfo("Foo", DeclaredAs.Class, "org.example.Bar$$Foo", List(), List(), None),
+              ArrowTypeInfo("(String, Int) => Foo", "(java.lang.String, scala.Int) => org.example.Bar.Foo",
+                BasicTypeInfo("Foo", DeclaredAs.Class, "org.example.Bar.Foo", List(), List(), None),
                 List(ParamSectionInfo(
                   List(
                     ("bar", BasicTypeInfo("String", DeclaredAs.Class, "java.lang.String", List(), List(), None)),
@@ -182,25 +178,31 @@ class BasicWorkflow extends EnsimeSpec
 
           // C-c C-v p Inspect source of current package
           project ! InspectPackageByPathReq("org.example")
-          expectMsgPF() {
-            case PackageInfo("example", "org.example", List(
-              BasicTypeInfo("Bar", DeclaredAs.Class, "org.example.Bar", List(), List(), Some(_)),
-              BasicTypeInfo("Bar$", DeclaredAs.Object, "org.example.Bar$", List(), List(), Some(_)),
-              BasicTypeInfo("Bloo", DeclaredAs.Class, "org.example.Bloo", List(), List(), Some(_)),
-              BasicTypeInfo("Bloo$", DeclaredAs.Object, "org.example.Bloo$", List(), List(), Some(_)),
-              BasicTypeInfo("Blue", DeclaredAs.Class, "org.example.Blue", List(), List(), Some(_)),
-              BasicTypeInfo("Blue$", DeclaredAs.Object, "org.example.Blue$", List(), List(), Some(_)),
-              BasicTypeInfo("CaseClassWithCamelCaseName", DeclaredAs.Class, "org.example.CaseClassWithCamelCaseName", List(), List(), Some(_)),
-              BasicTypeInfo("CaseClassWithCamelCaseName$", DeclaredAs.Object, "org.example.CaseClassWithCamelCaseName$", List(), List(), Some(_)),
-              BasicTypeInfo("Foo", DeclaredAs.Class, "org.example.Foo", List(), List(), Some(_)),
-              BasicTypeInfo("Foo$", DeclaredAs.Object, "org.example.Foo$", List(), List(), Some(_)),
-              BasicTypeInfo("Qux", DeclaredAs.Class, "org.example.Qux", List(), List(), Some(_)),
-              BasicTypeInfo("Test1", DeclaredAs.Class, "org.example.Test1", List(), List(), None),
-              BasicTypeInfo("Test1$", DeclaredAs.Object, "org.example.Test1$", List(), List(), None),
-              BasicTypeInfo("Test2", DeclaredAs.Class, "org.example.Test2", List(), List(), None),
-              BasicTypeInfo("Test2$", DeclaredAs.Object, "org.example.Test2$", List(), List(), None),
-              BasicTypeInfo("package$", DeclaredAs.Object, "org.example.package$", List(), List(), None))) =>
-          }
+
+          val packageInfo = expectMsgType[PackageInfo]
+          packageInfo.name shouldBe "example"
+          packageInfo.fullName shouldBe "org.example"
+
+          packageInfo.members.collect {
+            case b: BasicTypeInfo => b.copy(pos = None)
+          } should contain theSameElementsAs List(
+            BasicTypeInfo("Bar", DeclaredAs.Class, "org.example.Bar", Nil, Nil, None),
+            BasicTypeInfo("Bar", DeclaredAs.Object, "org.example.Bar", Nil, Nil, None),
+            BasicTypeInfo("Bloo", DeclaredAs.Class, "org.example.Bloo", Nil, Nil, None),
+            BasicTypeInfo("Bloo", DeclaredAs.Object, "org.example.Bloo", Nil, Nil, None),
+            BasicTypeInfo("Blue", DeclaredAs.Class, "org.example.Blue", Nil, Nil, None),
+            BasicTypeInfo("Blue", DeclaredAs.Object, "org.example.Blue", Nil, Nil, None),
+            BasicTypeInfo("CaseClassWithCamelCaseName", DeclaredAs.Class, "org.example.CaseClassWithCamelCaseName", Nil, Nil, None),
+            BasicTypeInfo("CaseClassWithCamelCaseName", DeclaredAs.Object, "org.example.CaseClassWithCamelCaseName", Nil, Nil, None),
+            BasicTypeInfo("Foo", DeclaredAs.Class, "org.example.Foo", Nil, Nil, None),
+            BasicTypeInfo("Foo", DeclaredAs.Object, "org.example.Foo", Nil, Nil, None),
+            BasicTypeInfo("Qux", DeclaredAs.Class, "org.example.Qux", Nil, Nil, None),
+            BasicTypeInfo("Test1", DeclaredAs.Class, "org.example.Test1", Nil, Nil, None),
+            BasicTypeInfo("Test1", DeclaredAs.Object, "org.example.Test1", Nil, Nil, None),
+            BasicTypeInfo("Test2", DeclaredAs.Class, "org.example.Test2", Nil, Nil, None),
+            BasicTypeInfo("Test2", DeclaredAs.Object, "org.example.Test2", Nil, Nil, None),
+            BasicTypeInfo("package", DeclaredAs.Object, "org.example.package", Nil, Nil, None)
+          )
 
           // expand selection around 'val foo'
           project ! ExpandSelectionReq(fooFile, 215, 215)
@@ -294,6 +296,64 @@ class BasicWorkflow extends EnsimeSpec
               val stripped = ast.replaceAll("[\n\r]", "")
               stripped == tree2.replaceAll("[\n\r]", "") || stripped == oldTree2.replaceAll("[\n\r]", "")
             } =>
+          }
+
+          project ! TypecheckFilesReq(List(Left(fooFile), Left(barFile)))
+          expectMsg(VoidResponse)
+
+          asyncHelper.fishForMessage() {
+            case FullTypeCheckCompleteEvent => true
+            case _ => false
+          }
+
+          project ! RefactorReq(4321, RenameRefactorDesc("Renamed", barFile, 30, 30), false)
+          expectMsgPF() {
+            case RefactorDiffEffect(4321, RefactorType.Rename, diff) =>
+              val renamedFile = new File(barFile.getPath.replace("Bar", "Renamed"))
+              val barChanges = s"""|@@ -1,13 +0,0 @@
+                                   |-package org.example
+                                   |-
+                                   |-object Bar extends App {
+                                   |-  case class Foo(bar: String, baz: Int)
+                                   |-  object Bla {
+                                   |-    val foo: Foo = Foo(
+                                   |-      bar = "Bar",
+                                   |-      baz = 123
+                                   |-    )
+                                   |-
+                                   |-    val fooUpd = foo.copy(bar = foo.bar.reverse)
+                                   |-  }
+                                   |-}
+                                   |""".stripMargin
+              val fooChanges = s"""|@@ -30,3 +30,3 @@
+                                   |   List(1, 2, 3).head + 2
+                                   |-  val x = Bar.Bla
+                                   |+  val x = Renamed.Bla
+                                   | }
+                                   |""".stripMargin
+              val renamedChanges = s"""|@@ -0,0 +1,13 @@
+                                       |+package org.example
+                                       |+
+                                       |+object Renamed extends App {
+                                       |+  case class Foo(bar: String, baz: Int)
+                                       |+  object Bla {
+                                       |+    val foo: Foo = Foo(
+                                       |+      bar = "Bar",
+                                       |+      baz = 123
+                                       |+    )
+                                       |+
+                                       |+    val fooUpd = foo.copy(bar = foo.bar.reverse)
+                                       |+  }
+                                       |+}
+                                       |""".stripMargin
+              val changes = Seq(
+                (barFile.getPath, DeleteFile, barChanges),
+                (fooFile.getPath, ChangeContents, fooChanges),
+                (renamedFile.getPath, CreateFile, renamedChanges)
+              )
+              val expectedDiff = expectedDiffContent(changes)
+              val diffContent = diff.canon.readString()
+              diffContent should ===(expectedDiff)
           }
         }
       }

@@ -3,18 +3,23 @@
 package org.ensime.core
 
 import java.io.File
-import org.ensime.api._
-import org.ensime.fixture._
-import org.ensime.vfs._
-import org.ensime.util.EnsimeSpec
-import org.ensime.util.file._
+
 import scala.collection.immutable.Queue
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.reflect.internal.util.{ BatchSourceFile, OffsetPosition }
 import scala.tools.nsc.Settings
-import scala.tools.nsc.reporters.ConsoleReporter
+import scala.tools.nsc.reporters.StoreReporter
 import scala.util.Properties
+
+import ReallyRichPresentationCompilerFixture._
+import org.ensime.api._
+import org.ensime.fixture._
+import org.ensime.indexer._
+import org.ensime.indexer.SearchServiceTestUtils._
+import org.ensime.util.EnsimeSpec
+import org.ensime.util.file._
+import org.ensime.vfs.EnsimeVFS
 
 class RichPresentationCompilerThatNeedsJavaLibsSpec extends EnsimeSpec
     with IsolatedRichPresentationCompilerFixture
@@ -28,7 +33,7 @@ class RichPresentationCompilerThatNeedsJavaLibsSpec extends EnsimeSpec
       import ReallyRichPresentationCompilerFixture._
 
       cc.search.refreshResolver()
-      Await.result(cc.search.refresh(), Duration.Inf)
+      refresh()(cc.search)
 
       runForPositionInCompiledSource(config, cc,
         "package com.example",
@@ -51,45 +56,7 @@ class RichPresentationCompilerSpec extends EnsimeSpec
 
   val original = EnsimeConfigFixture.EmptyTestProject
 
-  "RichPresentationCompiler" should "round-trip between typeFullName and askTypeInfoByName" in {
-    withPresCompiler { (config, cc) =>
-      val file = srcFile(config, "abc.scala", contents(
-        "package com.example",
-        "object /*1*/A { ",
-        "   val /*1.1*/x: Int = 1",
-        "   class  /*1.2*/X {} ",
-        "   object /*1.3*/X {} ",
-        "}",
-        "class  /*2*/A { ",
-        "   class  /*2.1*/X {} ",
-        "   object /*2.2*/X {} ",
-        "}"
-      ))
-      cc.askReloadFile(file)
-      cc.askLoadedTyped(file)
-
-      def roundtrip(label: String, expectedFullName: String) = {
-        val comment = "/*" + label + "*/"
-        val index = file.content.mkString.indexOf(comment)
-        val tpe = cc.askTypeInfoAt(new OffsetPosition(file, index + comment.length)).get
-        val fullName = tpe.fullName
-        fullName should ===(expectedFullName)
-
-        val tpe2 = cc.askTypeInfoByName(fullName).get
-        tpe2.fullName should ===(expectedFullName)
-      }
-
-      roundtrip("1", "com.example.A$")
-      roundtrip("1.1", "scala.Int")
-      roundtrip("1.2", "com.example.A$$X")
-      roundtrip("1.3", "com.example.A$$X$")
-      roundtrip("2", "com.example.A")
-      roundtrip("2.1", "com.example.A$X")
-      roundtrip("2.2", "com.example.A$X$")
-    }
-  }
-
-  it should "get symbol info with cursor immediately after and before symbol" in {
+  "RichPresentationCompiler" should "get symbol info with cursor immediately after and before symbol" in {
     withPresCompiler { (config, cc) =>
       import ReallyRichPresentationCompilerFixture._
       runForPositionInCompiledSource(config, cc,
@@ -110,7 +77,7 @@ class RichPresentationCompilerSpec extends EnsimeSpec
       import ReallyRichPresentationCompilerFixture._
 
       cc.search.refreshResolver()
-      Await.result(cc.search.refresh(), Duration.Inf)
+      refresh()(cc.search)
 
       runForPositionInCompiledSource(config, cc,
         "package com.example",
@@ -206,73 +173,6 @@ class RichPresentationCompilerSpec extends EnsimeSpec
           completions.completions.size shouldBe 0
         }
     }
-  }
-
-  it should "get symbol info by name" in withPresCompiler { (config, cc) =>
-    def verify(
-      fqn: String, member: Option[String], sig: Option[String], expectedLocalName: String,
-      expectedName: String, expectedDeclAs: DeclaredAs
-    ) = {
-      val symOpt = cc.askSymbolByName(fqn, member, sig)
-      symOpt shouldBe defined
-      val sym = symOpt.get
-      sym.localName should ===(expectedLocalName)
-      sym.name should ===(expectedName)
-      sym.tpe.declaredAs should ===(expectedDeclAs)
-    }
-    verify("java.lang.String", Some("startsWith"), None, "startsWith", "startsWith", DeclaredAs.Nil)
-    verify("java.lang.String", None, None, "String", "java.lang.String", DeclaredAs.Class)
-    verify("scala.Option", Some("wait"), Some("(x$1: Long,x$2: Int): Unit"),
-      "wait", "wait", DeclaredAs.Nil)
-    verify("scala.Option", Some("wait"), Some("(x$1: Long): Unit"),
-      "wait", "wait", DeclaredAs.Nil)
-    verify("scala.Option", Some("wait"), Some("(): Unit"), "wait", "wait", DeclaredAs.Nil)
-    verify("java$", Some("lang"), None, "lang", "java.lang$", DeclaredAs.Object)
-    verify("scala$", Some("Option$"), None, "Option", "scala.Option$", DeclaredAs.Object)
-    verify("scala$", Some("Option"), None, "Option", "scala.Option", DeclaredAs.Class)
-    verify("scala.Option", Some("WithFilter"), None, "WithFilter", "scala.Option$WithFilter", DeclaredAs.Class)
-    verify("scala.Option$WithFilter", Some("flatMap"), None, "flatMap", "flatMap", DeclaredAs.Nil)
-    verify("scala.Boolean", None, None, "Boolean", "scala.Boolean", DeclaredAs.Class)
-    verify("scala.Predef$", Some("DummyImplicit$"), None, "DummyImplicit", "scala.Predef$$DummyImplicit$", DeclaredAs.Object)
-  }
-
-  it should "handle askSymbolByName" in withPresCompiler { (config, cc) =>
-    val file = srcFile(config, "abc.scala", contents(
-      "package com.example",
-      "object A { ",
-      "   val x: Int = 1",
-      "   class  X {}",
-      "   object X {}",
-      "}",
-      "class A { ",
-      "   class  X {}",
-      "   object X {}",
-      "}"
-    ))
-    cc.askReloadFile(file)
-    cc.askLoadedTyped(file)
-
-    def test(typeName: String, memberName: String, localName: String,
-      symFullName: String, isType: Boolean, expectedTypeName: String, expectedDeclAs: DeclaredAs) = {
-      val res = cc.askSymbolByName(typeName, Some(memberName), None)
-      res shouldBe defined
-      val sym = res.get
-      withClue(sym) {
-        sym.localName should ===(localName)
-        sym.name should ===(symFullName)
-        sym.tpe.fullName should ===(expectedTypeName)
-        sym.tpe.declaredAs should ===(expectedDeclAs)
-      }
-    }
-
-    test("com.example$", "A$", "A", "com.example.A$", isType = false, "com.example.A$", DeclaredAs.Object)
-    test("com.example.A$", "x", "x", "x", isType = false, "scala.Int", DeclaredAs.Class)
-    test("com.example.A$", "X$", "X", "com.example.A$$X$", isType = false, "com.example.A$$X$", DeclaredAs.Object)
-    test("com.example.A$", "X", "X", "com.example.A$$X", isType = true, "com.example.A$$X", DeclaredAs.Class)
-
-    test("com.example$", "A", "A", "com.example.A", isType = true, "com.example.A", DeclaredAs.Class)
-    test("com.example.A", "X$", "X", "com.example.A$X$", isType = false, "com.example.A$X$", DeclaredAs.Object)
-    test("com.example.A", "X", "X", "com.example.A$X", isType = true, "com.example.A$X", DeclaredAs.Class)
   }
 
   it should "get completions on member with no prefix" in withPosInCompiledSource(
@@ -422,17 +322,17 @@ class RichPresentationCompilerSpec extends EnsimeSpec
         val mem = sup.tpe.members.find(_.name == "banana").get.asInstanceOf[NamedTypeMemberInfo]
         val tpe = mem.tpe.asInstanceOf[ArrowTypeInfo]
 
-        tpe.resultType.name shouldBe "List"
+        tpe.resultType.name shouldBe "List[String]"
         tpe.resultType.args.head.name shouldBe "String"
         val (paramName, paramTpe) = tpe.paramSections.head.params.head
         paramName shouldBe "p"
-        paramTpe.name shouldBe "List"
+        paramTpe.name shouldBe "List[String]"
         paramTpe.args.head.name shouldBe "String"
       }
       {
         val mem = sup.tpe.members.find(_.name == "pineapple").get.asInstanceOf[NamedTypeMemberInfo]
         val tpe = mem.tpe.asInstanceOf[BasicTypeInfo]
-        tpe.name shouldBe "List"
+        tpe.name shouldBe "List[String]"
         tpe.args.head.name shouldBe "String"
       }
     }
@@ -447,34 +347,6 @@ class RichPresentationCompilerSpec extends EnsimeSpec
       val supersNames = supers.map(_.tpe.name).toList
       supersNames.toSet should ===(Set("pipo", "bidon", "Object", "Product", "Serializable", "Any"))
     }
-
-  it should "get type info for imports" in withPresCompiler { (config, cc) =>
-    val expected = Map(
-      "1.0" -> Some("java$"),
-      "1.1" -> Some("java$"),
-      "1.2" -> Some("java.io$"),
-      "1.3" -> Some("java.io$"),
-      "1.4" -> Some("java.io.File$"),
-      "1.5" -> Some("java.io.File$"),
-      "1.6" -> Some("java.lang.String"),
-      "1.7" -> Some("java.lang.String"),
-      "2.0" -> Some("java.io.Bits$"),
-      "2.1" -> Some("java.io.Bits$"),
-      "2.2" -> Some("java.io.File$"),
-      "2.3" -> Some("java.io.File$"),
-      "3.0" -> None
-    )
-
-    import ReallyRichPresentationCompilerFixture._
-    runForPositionInCompiledSource(config, cc,
-      "package com.example",
-      "import @1.0@java@1.1@.@1.2@io@1.3@.@1.4@File@1.5@.@1.6@separator@1.7@",
-      "import java.io.{ @2.0@Bits => one@2.1@, @2.2@File => two@2.3@ }",
-      "import java.io._@3.0@") { (p, label, cc) =>
-        val info = cc.askTypeInfoAt(p)
-        info.map(_.fullName) should ===(expected(label))
-      }
-  }
 
   it should "get symbol positions for compiled files" in withPresCompiler { (config, cc) =>
     val defsFile = srcFile(config, "com/example/defs.scala", contents(
@@ -546,7 +418,7 @@ class RichPresentationCompilerSpec extends EnsimeSpec
         val declPos = info.declPos
         declPos match {
           case Some(op: OffsetSourcePosition) => assert(op.offset === defPos)
-          case _ => fail(s"For $comment, unexpected declPos value: $declPos")
+          case _ => fail(s"For $comment ($info), unexpected declPos value: $declPos")
         }
       } finally {
         cc1.askShutdown()
@@ -582,10 +454,17 @@ class RichPresentationCompilerSpec extends EnsimeSpec
 trait RichPresentationCompilerTestUtils {
   val scala210 = Properties.versionNumberString.startsWith("2.10")
 
+  def clazz(pkg: Seq[String], clazz: String): ClassName =
+    ClassName(PackageName(pkg.toList), clazz)
+  def method(pkg: Seq[String], cl: String, name: String, desc: String) =
+    MethodName(clazz(pkg, cl), name, DescriptorParser.parse(desc))
+  def field(pkg: Seq[String], cl: String, name: String) =
+    FieldName(clazz(pkg, cl), name)
+
   def compileScala(paths: List[String], target: File, classPath: String): Unit = {
     val settings = new Settings
     settings.outputDirs.setSingleOutput(target.getAbsolutePath)
-    val reporter = new ConsoleReporter(settings)
+    val reporter = new StoreReporter
     settings.classpath.value = classPath
     val g = new scala.tools.nsc.Global(settings, reporter)
     val run = new g.Run
@@ -621,7 +500,6 @@ trait ReallyRichPresentationCompilerFixture {
 
   final def withPosInCompiledSource(lines: String*)(testCode: (OffsetPosition, RichPresentationCompiler) => Any): Any =
     withPresCompiler { (config, cc) =>
-      import ReallyRichPresentationCompilerFixture._
       runForPositionInCompiledSource(config, cc, lines: _*) {
         (p, _, cc) => testCode(p, cc)
       }
@@ -636,7 +514,7 @@ object ReallyRichPresentationCompilerFixture
     val contents = lines.mkString("\n")
     var offset = 0
     var points = Queue.empty[(Int, String)]
-    val re = """@([a-z0-9\.]*)@"""
+    val re = """@([a-z0-9\._]*)@"""
     re.r.findAllMatchIn(contents).foreach { m =>
       points :+= ((m.start - offset, m.group(1)))
       offset += (m.end - m.start)
@@ -649,4 +527,5 @@ object ReallyRichPresentationCompilerFixture
       testCode(new OffsetPosition(file, pt._1), pt._2, cc)
     }
   }
+
 }

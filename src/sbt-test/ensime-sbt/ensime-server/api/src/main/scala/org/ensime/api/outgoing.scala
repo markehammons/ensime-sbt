@@ -306,6 +306,7 @@ final case class MethodBytecode(
   endLine: Int
 )
 
+@deprecating("not type safe")
 final case class CompletionSignature(
   sections: List[List[(String, String)]],
   result: String,
@@ -313,9 +314,10 @@ final case class CompletionSignature(
 )
 
 final case class CompletionInfo(
+  typeInfo: Option[TypeInfo],
   name: String,
-  typeSig: CompletionSignature,
-  isCallable: Boolean,
+  @deprecating("use `typeInfo`") typeSig: CompletionSignature,
+  @deprecating("not needed with `typeInfo`") isCallable: Boolean,
   relevance: Int,
   toInsert: Option[String]
 ) extends RpcResponse
@@ -445,7 +447,7 @@ final case class NamedTypeMemberInfo(
     name: String,
     `type`: TypeInfo,
     pos: Option[SourcePosition],
-    signatureString: Option[String],
+    signatureString: Option[String], // the FQN descriptor
     declAs: DeclaredAs
 ) extends EntityInfo {
   override def members = List.empty
@@ -475,11 +477,11 @@ final case class BasicTypeInfo(
 
 final case class ArrowTypeInfo(
     name: String,
+    fullName: String,
     resultType: TypeInfo,
     paramSections: Iterable[ParamSectionInfo]
 ) extends TypeInfo {
   def declAs = DeclaredAs.Nil
-  def fullName = name
   def typeArgs = List.empty
   def members = List.empty
   def pos = None
@@ -517,7 +519,7 @@ final case class EnsimeImplementation(
 final case class ConnectionInfo(
   pid: Option[Int] = None,
   implementation: EnsimeImplementation = EnsimeImplementation("ENSIME"),
-  version: String = "0.8.20"
+  version: String = "1.0"
 ) extends RpcResponse
 
 sealed trait ImplicitInfo

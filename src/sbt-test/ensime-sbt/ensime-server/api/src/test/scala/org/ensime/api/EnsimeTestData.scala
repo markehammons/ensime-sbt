@@ -45,12 +45,6 @@ trait EnsimeTestData {
 
   val packageInfo = new PackageInfo("name", "fullName", List())
 
-  val completionInfo = new CompletionInfo("name", new CompletionSignature(List(List(("abc", "def"), ("hij", "lmn"))), "ABC", false), false, 90, Some("BAZ"))
-
-  val completionInfo2 = new CompletionInfo("name2", new CompletionSignature(List(List(("abc", "def"))), "ABC", false), true, 91, None)
-
-  val completionInfoList = List(completionInfo, completionInfo2)
-
   val refactorFailure = RefactorFailure(7, "message")
 
   val file1 = canon("/abc/def")
@@ -111,7 +105,13 @@ trait EnsimeTestData {
 
   val noteList = NewScalaNotesEvent(isFull = true, List(note1, note2))
 
-  val entityInfo: TypeInfo = new ArrowTypeInfo("Arrow1", typeInfo, List(paramSectionInfo))
+  val entityInfo: TypeInfo = new ArrowTypeInfo("Arrow1", "example.Arrow1", typeInfo, List(paramSectionInfo))
+
+  val completionInfo = CompletionInfo(Some(typeInfo), "name", CompletionSignature(List(List(("abc", "def"), ("hij", "lmn"))), "ABC", false), false, 90, Some("BAZ"))
+
+  val completionInfo2 = CompletionInfo(None, "name2", CompletionSignature(List(List(("abc", "def"))), "ABC", false), true, 91, None)
+
+  val completionInfoList = List(completionInfo, completionInfo2)
 
   val sourceFileInfo = SourceFileInfo(file1, Some("{/* code here */}"), Some(file2))
   val dtid = DebugThreadId(13)

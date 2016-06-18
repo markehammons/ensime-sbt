@@ -476,7 +476,7 @@ class JerkFormatsSpec extends EnsimeSpec with SprayJsonTestSupport with EnsimeTe
 
     roundtrip(
       completionInfo: EnsimeServerMessage,
-      """{"typehint":"CompletionInfo","name":"name","typeSig":{"sections":[[["abc","def"],["hij","lmn"]]],"result":"ABC", "hasImplicit": false},"relevance":90,"isCallable":false,"toInsert":"BAZ"}"""
+      """{"typehint":"CompletionInfo","typeInfo":{"name":"type1","fullName":"FOO.type1","typehint":"BasicTypeInfo","typeArgs":[],"members":[],"declAs":{"typehint":"Method"}},"name":"name","typeSig":{"sections":[[["abc","def"],["hij","lmn"]]],"result":"ABC", "hasImplicit": false},"relevance":90,"isCallable":false,"toInsert":"BAZ"}"""
     )
 
     roundtrip(
@@ -486,7 +486,7 @@ class JerkFormatsSpec extends EnsimeSpec with SprayJsonTestSupport with EnsimeTe
 
     roundtrip(
       CompletionInfoList("fooBar", List(completionInfo)): EnsimeServerMessage,
-      """{"typehint":"CompletionInfoList","prefix":"fooBar","completions":[{"name":"name","typeSig":{"sections":[[["abc","def"],["hij","lmn"]]],"result":"ABC", "hasImplicit": false},"relevance":90,"isCallable":false,"toInsert":"BAZ"}]}"""
+      """{"typehint":"CompletionInfoList","prefix":"fooBar","completions":[{"typeInfo":{"name":"type1","fullName":"FOO.type1","typehint":"BasicTypeInfo","typeArgs":[],"members":[],"declAs":{"typehint":"Method"}},"name":"name","typeSig":{"sections":[[["abc","def"],["hij","lmn"]]],"result":"ABC", "hasImplicit": false},"relevance":90,"isCallable":false,"toInsert":"BAZ"}]}"""
     )
 
     roundtrip(
@@ -501,7 +501,7 @@ class JerkFormatsSpec extends EnsimeSpec with SprayJsonTestSupport with EnsimeTe
 
     roundtrip(
       entityInfo: EnsimeServerMessage,
-      """{"resultType":{"name":"type1","fullName":"FOO.type1","typehint":"BasicTypeInfo","typeArgs":[],"members":[],"declAs":{"typehint":"Method"}},"name":"Arrow1","paramSections":[{"params":[["ABC",{"name":"type1","fullName":"FOO.type1","typehint":"BasicTypeInfo","typeArgs":[],"members":[],"declAs":{"typehint":"Method"}}]],"isImplicit":false}],"typehint":"ArrowTypeInfo"}"""
+      """{"resultType":{"name":"type1","fullName":"FOO.type1","typehint":"BasicTypeInfo","typeArgs":[],"members":[],"declAs":{"typehint":"Method"}},"name":"Arrow1","fullName":"example.Arrow1","paramSections":[{"params":[["ABC",{"name":"type1","fullName":"FOO.type1","typehint":"BasicTypeInfo","typeArgs":[],"members":[],"declAs":{"typehint":"Method"}}]],"isImplicit":false}],"typehint":"ArrowTypeInfo"}"""
     )
 
     roundtrip(

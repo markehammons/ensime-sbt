@@ -2,12 +2,12 @@
 // Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.indexer
 
+import scala.collection.immutable.Queue
+
 import akka.event.slf4j.SLF4JLogging
 import org.apache.commons.vfs2.FileObject
-import org.objectweb.asm.Opcodes._
 import org.objectweb.asm._
-
-import scala.collection.immutable.Queue
+import org.objectweb.asm.Opcodes._
 
 trait ClassfileIndexer {
   this: SLF4JLogging =>
@@ -43,7 +43,7 @@ trait ClassfileIndexer {
 
   private class AsmCallback extends ClassVisitor(ASM5) with ReferenceInClassHunter {
     // updated every time we get more info
-    var clazz: RawClassfile = _
+    @volatile var clazz: RawClassfile = _
 
     override def visit(
       version: Int, access: Int, name: String, signature: String,
@@ -67,11 +67,11 @@ trait ClassfileIndexer {
 
     override def visitField(access: Int, name: String, desc: String, signature: String, value: AnyRef): FieldVisitor = {
       val field = RawField(
-        MemberName(clazz.name, name),
-        ClassName.fromDescriptor(desc),
+        FieldName(clazz.name, name),
+        DescriptorParser.parseType(desc),
         Option(signature), Access(access)
       )
-      clazz = clazz.copy(fields = clazz.fields :+ field)
+      clazz = clazz.copy(fields = clazz.fields enqueue field)
       super.visitField(access, name, desc, signature, value)
     }
 
@@ -99,8 +99,8 @@ trait ClassfileIndexer {
 
             case name =>
               val descriptor = DescriptorParser.parse(desc)
-              val method = RawMethod(MemberName(clazz.name, name), Access(access), descriptor, Option(signature), firstLine)
-              clazz = clazz.copy(methods = clazz.methods :+ method)
+              val method = RawMethod(MethodName(clazz.name, name, descriptor), Access(access), Option(signature), firstLine)
+              clazz = clazz.copy(methods = clazz.methods enqueue method)
           }
         }
       }
@@ -167,34 +167,36 @@ trait ClassfileIndexer {
   private trait ReferenceInMethodHunter {
     this: MethodVisitor =>
 
+    // NOTE: :+ and :+= are really slow (scala 2.10), prefer "enqueue"
     protected var internalRefs = Queue.empty[FullyQualifiedName]
 
+    // doesn't disambiguate FQNs of methods, so storing as FieldName references
     private def memberOrInit(owner: String, name: String): FullyQualifiedName =
       name match {
         case "<init>" | "<clinit>" => ClassName.fromInternal(owner)
-        case member => MemberName(ClassName.fromInternal(owner), member)
+        case member => FieldName(ClassName.fromInternal(owner), member)
       }
 
     override def visitLocalVariable(
       name: String, desc: String, signature: String,
       start: Label, end: Label, index: Int
     ): Unit = {
-      internalRefs :+= ClassName.fromDescriptor(desc)
+      internalRefs = internalRefs enqueue ClassName.fromDescriptor(desc)
     }
 
     override def visitMultiANewArrayInsn(desc: String, dims: Int): Unit = {
-      internalRefs :+= ClassName.fromDescriptor(desc)
+      internalRefs = internalRefs enqueue ClassName.fromDescriptor(desc)
     }
 
     override def visitTypeInsn(opcode: Int, desc: String): Unit = {
-      internalRefs :+= ClassName.fromInternal(desc)
+      internalRefs = internalRefs enqueue ClassName.fromInternal(desc)
     }
 
     override def visitFieldInsn(
       opcode: Int, owner: String, name: String, desc: String
     ): Unit = {
-      internalRefs :+= memberOrInit(owner, name)
-      internalRefs :+= ClassName.fromDescriptor(desc)
+      internalRefs = internalRefs enqueue memberOrInit(owner, name)
+      internalRefs = internalRefs enqueue ClassName.fromDescriptor(desc)
     }
 
     override def visitMethodInsn(
@@ -214,7 +216,7 @@ trait ClassfileIndexer {
       override def visitEnum(name: String, desc: String, value: String): Unit = handleAnn(desc)
     }
     private def handleAnn(desc: String): AnnotationVisitor = {
-      internalRefs :+= ClassName.fromDescriptor(desc)
+      internalRefs = internalRefs enqueue ClassName.fromDescriptor(desc)
       annVisitor
     }
     override def visitAnnotation(desc: String, visible: Boolean) = handleAnn(desc)

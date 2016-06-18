@@ -21,11 +21,28 @@
  * In addition, Option[T]s are indexed but not stored (not
  * fully persistent).
  */
-package org.ensime.indexer
+package org.ensime.indexer.lucene
 
 import org.apache.lucene.document._
+import org.apache.lucene.search.Query
 
-package object lucene {
+trait DocumentProvider[T] {
+  def toDocument(t: T): Document
+}
+
+trait DocumentRecovery[T] {
+  def toEntity(d: Document): T
+}
+
+trait Entity extends Product {
+  def id: String
+}
+
+trait QueryProvider[T] {
+  def createQuery(t: T): Query
+}
+
+object `package` {
   implicit class RichEntity[T <: Entity](e: T) {
     def toDocument(implicit p: DocumentProvider[T]) = p.toDocument(e)
   }

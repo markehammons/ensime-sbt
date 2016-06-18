@@ -22,7 +22,7 @@ object EnsimeConfigProtocol {
     with CamelCaseToDashes
   import org.ensime.config.EnsimeConfigProtocol.Protocol._
 
-  private val log = Logger(this.getClass.getName)
+  private def log = Logger(this.getClass.getName)
 
   private implicit val moduleFormat: SexpFormat[EnsimeModule] = cachedImplicit
   private implicit val configFormat: SexpFormat[EnsimeConfig] = cachedImplicit

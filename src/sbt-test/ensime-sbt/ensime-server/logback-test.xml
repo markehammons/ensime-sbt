@@ -4,7 +4,14 @@
   </contextListener>
   <appender name="file" class="ch.qos.logback.core.FileAppender">
     <file>test.log</file>
-    <append>false</append>
+    <if condition='isNull("CI")'>
+      <then>
+        <append>false</append>
+      </then>
+      <else>
+        <append>true</append>
+      </else>
+    </if>
     <encoder>
       <pattern>%d{HH:mm:ss.SSS} %-5level %X{akkaSource} %logger{36} - %msg%n</pattern>
     </encoder>

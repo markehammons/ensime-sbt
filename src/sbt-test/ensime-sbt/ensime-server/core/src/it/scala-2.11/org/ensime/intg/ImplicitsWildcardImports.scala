@@ -27,15 +27,12 @@ class ImplicitsWildcardImports extends EnsimeSpec
           val sourceRoot = scalaMain(config)
           val exampleFile = sourceRoot / "org/example/Example.scala"
 
-          log.info("Getting type the first time")
           project ! SymbolAtPointReq(Left(exampleFile), 116)
           expectMsgType[SymbolInfo].name should be("seconds")
 
-          log.info("Getting implicit info")
           project ! ImplicitInfoReq(Left(exampleFile), OffsetRange(0, 121))
           expectMsgType[ImplicitInfos]
 
-          log.info("Getting type the second time")
           project ! SymbolAtPointReq(Left(exampleFile), 116)
           expectMsgType[SymbolInfo].name should be("seconds")
         }

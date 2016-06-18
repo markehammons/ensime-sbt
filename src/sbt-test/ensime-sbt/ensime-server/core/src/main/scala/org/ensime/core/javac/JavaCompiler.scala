@@ -2,25 +2,26 @@
 // Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.core.javac
 
-import akka.actor.ActorRef
-import akka.event.slf4j.SLF4JLogging
-import com.sun.source.tree.Scope
-import com.sun.source.tree.{ IdentifierTree, MemberSelectTree }
-import com.sun.source.util.{ JavacTask, TreePath }
 import java.io.{ File, FileInputStream, InputStream }
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
-import javax.lang.model.`type`.TypeKind
-import javax.lang.model.`type`.TypeMirror
+
+import scala.collection.JavaConverters._
+
+import akka.actor.ActorRef
+import akka.event.slf4j.SLF4JLogging
+import com.sun.source.tree.{ Scope, IdentifierTree, MemberSelectTree }
+import com.sun.source.util.{ JavacTask, TreePath }
+import com.sun.tools.javac.util.Abort
+import javax.lang.model.`type`.{ TypeMirror, TypeKind }
+import javax.lang.model.element.ExecutableElement
 import javax.tools._
 import org.ensime.api._
 import org.ensime.core.DocSigPair
-import org.ensime.vfs._
 import org.ensime.indexer.SearchService
 import org.ensime.util.ReportHandler
 import org.ensime.util.file._
-import scala.collection.JavaConverters._
-import com.sun.tools.javac.util.Abort
+import org.ensime.vfs._
 
 class JavaCompiler(
     val config: EnsimeConfig,
@@ -98,7 +99,7 @@ class JavaCompiler(
         def withName(name: String): Option[SymbolInfo] = {
 
           val tpeMirror = Option(c.trees.getTypeMirror(path))
-          val nullTpe = new BasicTypeInfo("NA", DeclaredAs.Nil, "NA", List.empty, List.empty, None)
+          val nullTpe = BasicTypeInfo("NA", DeclaredAs.Nil, "NA", List.empty, List.empty, None)
 
           Some(SymbolInfo(
             fqn(c, path).map(_.toFqnString).getOrElse(name),
@@ -145,9 +146,20 @@ class JavaCompiler(
     }
   }
 
-  private def typeMirrorToTypeInfo(tm: TypeMirror): TypeInfo = {
-    BasicTypeInfo(tm.toString, DeclaredAs.Class, tm.toString, List(), List(), Some(EmptySourcePosition()))
-  }
+  protected def typeMirrorToTypeInfo(tm: TypeMirror): TypeInfo =
+    BasicTypeInfo(tm.toString, DeclaredAs.Class, tm.toString, Nil, Nil, None)
+
+  protected def methodToTypeInfo(e: ExecutableElement): TypeInfo =
+    ArrowTypeInfo(
+      e.getSimpleName.toString, e.toString,
+      typeMirrorToTypeInfo(e.getReturnType),
+      ParamSectionInfo(
+        e.getParameters.asScala.map { param =>
+          param.getSimpleName.toString -> typeMirrorToTypeInfo(param.asType)
+        },
+        isImplicit = false
+      ) :: Nil
+    )
 
   private def getTypeMirror(c: Compilation, offset: Int): Option[TypeMirror] = {
     val path: Option[TreePath] = PathFor(c, offset)

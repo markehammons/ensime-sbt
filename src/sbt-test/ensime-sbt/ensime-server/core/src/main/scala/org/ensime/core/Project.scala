@@ -6,16 +6,18 @@ import akka.actor._
 import akka.event.LoggingReceive.withLabel
 import org.apache.commons.vfs2.FileObject
 import org.ensime.api._
-import org.ensime.core.debug.DebugManager
+import org.ensime.core.debug.DebugActor
 import org.ensime.vfs._
 import org.ensime.indexer._
 
 import scala.collection.immutable.ListSet
 import scala.concurrent.duration._
+import scala.util.Properties._
 import scala.util._
-
 import org.ensime.util.file._
 import org.ensime.util.FileUtils
+
+final case class ShutdownRequest(reason: String, isError: Boolean = false)
 
 /**
  * The Project actor simply forwards messages coming from the user to
@@ -70,6 +72,8 @@ class Project(
         // we could also just blindly send this on each connection.
         broadcaster ! Broadcaster.Persist(IndexerReadyEvent)
         log.debug(s"created $inserts and removed $deletes searchable rows")
+        if (propOrFalse("ensime.exitAfterIndex"))
+          context.parent ! ShutdownRequest("Index only run", isError = false)
       case Failure(problem) =>
         log.warning(problem.toString)
         throw problem
@@ -96,7 +100,7 @@ class Project(
       scalac = system.deadLetters
       javac = context.actorOf(JavaAnalyzer(broadcaster, indexer, searchService), "javac")
     }
-    debugger = context.actorOf(DebugManager(broadcaster), "debugging")
+    debugger = context.actorOf(DebugActor.props(broadcaster), "debugging")
     docs = context.actorOf(DocResolver(), "docs")
   }
 
@@ -141,6 +145,7 @@ class Project(
   }
 
 }
+
 object Project {
   def apply(target: ActorRef)(implicit config: EnsimeConfig): Props =
     Props(classOf[Project], target, config)

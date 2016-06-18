@@ -388,9 +388,6 @@ object SwankProtocolResponse {
       case _ => deserializationError(sexp)
     }
   }
-  // must be defined after CompletionSignatureFormat
-  implicit val CompletionInfoFormat: SexpFormat[CompletionInfo] = cachedImplicit
-  implicit val CompletionInfoListFormat: SexpFormat[CompletionInfoList] = cachedImplicit
 
   // watch out for recursive references here...
   implicit object TypeInfoFormat extends TraitFormatAlt[TypeInfo] {
@@ -432,6 +429,10 @@ object SwankProtocolResponse {
   implicit def SymbolInfoFormat: SexpFormat[SymbolInfo] = { def SymbolInfoFormat = ???; implicitly[SexpFormat[SymbolInfo]] }
   implicit def InterfaceInfoFormat: SexpFormat[InterfaceInfo] = { def InterfaceInfoFormat = ???; implicitly[SexpFormat[InterfaceInfo]] }
   implicit def TypeInspectInfoFormat: SexpFormat[TypeInspectInfo] = { def TypeInspectInfoFormat = ???; implicitly[SexpFormat[TypeInspectInfo]] }
+
+  // must be defined after CompletionSignatureFormat and TypeInfo
+  implicit val CompletionInfoFormat: SexpFormat[CompletionInfo] = cachedImplicit
+  implicit val CompletionInfoListFormat: SexpFormat[CompletionInfoList] = cachedImplicit
 
   implicit object FileEditFormat extends TraitFormatAlt[FileEdit] {
     def write(ti: FileEdit): Sexp = ti match {

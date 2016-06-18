@@ -1,8 +1,8 @@
-package debug
+package variables
 
-import Helper.noop
+import debug.Helper._
 
-object Variables {
+object ReadVariables {
 
   def main(args: Array[String]) {
     val a = true
@@ -21,12 +21,4 @@ object Variables {
     noop(None)
   }
 
-}
-
-case class One(s: String) {
-  override def toString() = s
-}
-
-object NullToString {
-  override def toString() = null
 }

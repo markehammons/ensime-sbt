@@ -5,6 +5,7 @@ package org.ensime.indexer.lucene
 import org.apache.lucene.document.Field._
 import org.apache.lucene.document._
 import org.ensime.util.EnsimeSpec
+import shapeless.Typeable
 
 class LuceneSerializationSpec extends EnsimeSpec {
 
@@ -15,7 +16,7 @@ class LuceneSerializationSpec extends EnsimeSpec {
   }
 
   case class SimpleThing(id: String, b: String) extends Entity
-  implicit object SimpleThingS extends EntityS[SimpleThing](classOf[SimpleThing]) {
+  implicit object SimpleThingS extends EntityS[SimpleThing](Typeable[SimpleThing]) {
     def addFields(doc: Document, t: SimpleThing): Unit =
       doc.add(new TextField("b", t.b, Store.YES))
     def toEntity(doc: Document): SimpleThing =

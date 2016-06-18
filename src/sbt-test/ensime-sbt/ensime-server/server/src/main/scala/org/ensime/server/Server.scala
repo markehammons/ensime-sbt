@@ -4,8 +4,12 @@ package org.ensime.server
 
 import java.io._
 
-import akka.actor.SupervisorStrategy.Stop
+import scala.concurrent.duration._
+import scala.util._
+import scala.util.Properties._
+
 import akka.actor._
+import akka.actor.SupervisorStrategy.Stop
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.Http.ServerBinding
 import akka.http.scaladsl.server.RouteResult.route2HandlerFlow
@@ -17,14 +21,8 @@ import org.ensime.api._
 import org.ensime.config._
 import org.ensime.core._
 import org.ensime.server.tcp.TCPServer
+import org.ensime.util.Slf4jSetup
 import org.slf4j._
-import org.slf4j.bridge.SLF4JBridgeHandler
-
-import scala.concurrent.duration._
-import scala.util.Properties._
-import scala.util._
-
-final case class ShutdownRequest(reason: String, isError: Boolean = false)
 
 class ServerActor(
     config: EnsimeConfig,
@@ -105,8 +103,8 @@ class ServerActor(
 }
 
 object Server {
-  SLF4JBridgeHandler.removeHandlersForRootLogger()
-  SLF4JBridgeHandler.install()
+  Slf4jSetup.init()
+
   val log = LoggerFactory.getLogger("Server")
 
   def main(args: Array[String]): Unit = {

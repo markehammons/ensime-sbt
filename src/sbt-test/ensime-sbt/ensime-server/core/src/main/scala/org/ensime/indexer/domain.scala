@@ -2,9 +2,9 @@
 // Licence: http://www.gnu.org/licenses/gpl-3.0.en.html
 package org.ensime.indexer
 
-import org.objectweb.asm.Opcodes._
-
 import scala.collection.immutable.Queue
+
+import org.objectweb.asm.Opcodes._
 
 sealed trait Access
 case object Public extends Access
@@ -29,7 +29,8 @@ final case class PackageName(path: List[String]) extends FullyQualifiedName {
   def contains(o: FullyQualifiedName) = o match {
     case PackageName(pn) => pn.startsWith(path)
     case ClassName(p, _) => contains(p)
-    case MemberName(c, _) => contains(c)
+    case FieldName(c, _) => contains(c)
+    case MethodName(c, _, _) => contains(c)
   }
   def fqnString = path.mkString(".")
   def parent = PackageName(path.init)
@@ -39,13 +40,14 @@ final case class ClassName(pack: PackageName, name: String) extends FullyQualifi
   def contains(o: FullyQualifiedName) = o match {
     case ClassName(op, on) if pack == op && on.startsWith(name) =>
       (on == name) || on.startsWith(name + "$")
-    case MemberName(cn, _) => contains(cn)
+    case FieldName(cn, _) => contains(cn)
+    case MethodName(cn, _, _) => contains(cn)
     case _ => false
   }
 
   def fqnString =
     if (pack.path.isEmpty) name
-    else ClassName.cleanupPackage(pack.fqnString + "." + name)
+    else pack.fqnString + "." + name
 
   private def nonPrimitiveInternalString: String =
     "L" + (if (pack.path.isEmpty) name else pack.path.mkString("/") + "/" + name) + ";"
@@ -92,25 +94,37 @@ object ClassName {
     }
 
   // internal name is effectively the FQN with / instead of dots
-  def fromInternal(internal: String): ClassName = {
-    val parts = internal.split("/")
+  def fromInternal(internal: String): ClassName = fromFqn(internal, '/')
+
+  def fromFqn(internal: String, splitter: Char = '.'): ClassName = {
+    val parts = internal.split(splitter)
     val (before, after) = parts.splitAt(parts.length - 1)
     ClassName(PackageName(before.toList), after(0))
   }
 
-  def cleanupPackage(name: String): String = {
-    name.replaceAll("\\.package\\$?\\.", ".")
-      .replaceAll("\\.package\\$(?!$)", ".")
-      .replaceAll("\\.package$", ".package\\$")
-  }
 }
 
-final case class MemberName(
+sealed trait MemberName extends FullyQualifiedName {
+  def contains(o: FullyQualifiedName) = this == o
+}
+
+case class FieldName(
     owner: ClassName,
     name: String
-) extends FullyQualifiedName {
-  def contains(o: FullyQualifiedName) = this == o
-  def fqnString = ClassName.cleanupPackage(owner.fqnString + "." + name)
+// not always available in the ASM parser
+//ret: DescriptorType
+) extends MemberName {
+  def fqnString = owner.fqnString + "." + name
+}
+
+// FQNs are not really unique, because method overloading, so fudge
+// the descriptor into the FQN
+final case class MethodName(
+    owner: ClassName,
+    name: String,
+    descriptor: Descriptor
+) extends MemberName {
+  def fqnString = owner.fqnString + "." + name + descriptor.descriptorString
 }
 
 sealed trait DescriptorType {
@@ -147,23 +161,20 @@ final case class RawSource(
 )
 
 final case class RawType(
-    fqn: String,
-    access: Access
-) {
-  def fqnString = ClassName.cleanupPackage(fqn)
-}
+  fqn: String,
+  access: Access
+)
 
 final case class RawField(
-  name: MemberName,
-  clazz: ClassName,
+  name: FieldName,
+  clazz: DescriptorType,
   generics: Option[String],
   access: Access
 )
 
 final case class RawMethod(
-  name: MemberName,
+  name: MethodName,
   access: Access,
-  descriptor: Descriptor,
   generics: Option[String],
   line: Option[Int]
 )

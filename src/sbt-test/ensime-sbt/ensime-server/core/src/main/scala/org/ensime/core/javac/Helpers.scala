@@ -3,13 +3,14 @@
 package org.ensime.core.javac
 
 import akka.event.slf4j.SLF4JLogging
-import com.sun.source.tree.{ Tree, IdentifierTree }
+import com.sun.source.tree.{ IdentifierTree, Tree }
 import com.sun.source.util.TreePath
 import javax.lang.model.`type`.{ DeclaredType, PrimitiveType, TypeKind, TypeMirror }
-import javax.lang.model.element.ElementKind
-import javax.lang.model.element.{ Element, TypeElement }
+import javax.lang.model.element.{ ElementKind, Element, TypeElement }
+import org.ensime.api.deprecating
 import org.ensime.core.{ DocFqn, DocSig }
 
+@deprecating("prefer FullyQualifiedName")
 final case class JavaFqn(pack: Option[String], typename: Option[String], fieldOrMethod: Option[String]) {
   def toDocSig = DocSig(DocFqn(pack.getOrElse(""), typename.getOrElse("")), fieldOrMethod)
   def toFqnString = Array(pack, typename, fieldOrMethod).flatten.mkString(".")

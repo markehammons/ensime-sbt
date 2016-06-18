@@ -48,12 +48,14 @@ class PresentationReporter(handler: ReportHandler) extends Reporter with Positio
               pos.column
             }
 
+            val crash = msg.contains("Presentation compiler crashed")
             val note = new Note(
               f,
               formatMessage(msg),
               NoteSeverity(severity.id),
               pos.startOrCursor,
-              pos.endOrCursor,
+              // sometimes the compiler flags the entire file
+              if (crash) pos.startOrCursor else pos.endOrCursor,
               pos.line,
               posColumn
             )

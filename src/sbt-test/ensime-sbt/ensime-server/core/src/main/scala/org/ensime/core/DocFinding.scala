@@ -39,12 +39,30 @@
  */
 package org.ensime.core
 
+import org.ensime.indexer._
+
 // Transform symbols to scaladoc components, with anchors to select specific
 // members of a container type.
 //
 // See scala/src/scaladoc/scala/tools/nsc/doc/base/MemberLookupBase.scala for
 // details related to link construction.
-trait DocFinding { self: RichPresentationCompiler =>
+trait DocFinding { self: RichPresentationCompiler with SymbolToFqn =>
+
+  // companions don't exist in Java, and the $ are . in javadocs
+  private def cleanClass(n: String): String = n.replaceAll("\\$$", "").replace("$", ".")
+
+  private def javaFqn(tpe: Type): DocFqn = {
+    toFqn(tpe.typeSymbol) match {
+      case PackageName(parts) =>
+        DocFqn(parts.mkString("."), "package")
+      case ClassName(pkg, clazz) =>
+        DocFqn(pkg.fqnString, cleanClass(clazz))
+      case FieldName(ClassName(pkg, clazz), field) =>
+        DocFqn(pkg.fqnString, s"${cleanClass(clazz)}.$field")
+      case MethodName(ClassName(pkg, clazz), method, _) =>
+        DocFqn(pkg.fqnString, s"${cleanClass(clazz)}.$method")
+    }
+  }
 
   private def isRoot(s: Symbol) = (s eq NoSymbol) || s.isRootSymbol || s.isEmptyPackage || s.isEmptyPackageClass
 
@@ -55,29 +73,7 @@ trait DocFinding { self: RichPresentationCompiler =>
   private def fullTypeName(sym: Symbol, nestedTypeSep: String, nameString: (Symbol => String)): String =
     sym.ownerChain.takeWhile(!_.hasPackageFlag).reverse.map(nameString).mkString(nestedTypeSep)
 
-  private val ScalaPrim = """^(Boolean|Byte|Char|Double|Float|Int|Long|Short)$""".r
-  private val ScalaAny = """^(Any|AnyVal|AnyRef)$""".r
-  private def javaFqn(tpe: Type): DocFqn = {
-    def nameString(sym: Symbol) = sym.nameString.replace("$", "")
-    val sym = tpe.typeSymbol
-    val s = if (sym.hasPackageFlag) {
-      DocFqn(fullPackage(sym), "package")
-    } else {
-      DocFqn(fullPackage(sym), fullTypeName(sym, ".", nameString))
-    }
-    s match {
-      case DocFqn("scala", ScalaPrim(datatype)) => DocFqn("", datatype.toLowerCase)
-      case DocFqn("scala", ScalaAny(datatype)) => DocFqn("java.lang", "Object")
-      case DocFqn("scala", "Array") =>
-        tpe.typeArgs.headOption.map { tpe =>
-          val fqn = javaFqn(tpe)
-          fqn.copy(typeName = fqn.typeName + "[]")
-        }.getOrElse(s)
-      case _ => s
-    }
-  }
-
-  protected def scalaFqn(sym: Symbol): DocFqn = {
+  private def scalaFqn(sym: Symbol): DocFqn = {
     def nameString(s: Symbol) = s.nameString + (if ((s.isModule || s.isModuleClass) && !s.hasPackageFlag) "$" else "")
     if (sym.isPackageObjectOrClass) {
       DocFqn(fullPackage(sym.owner), "package")
@@ -92,12 +88,18 @@ trait DocFinding { self: RichPresentationCompiler =>
     if (java) javaFqn(sym.tpe) else scalaFqn(sym)
   }
 
-  private def signatureString(sym: Symbol, java: Boolean): String = {
-    sym.nameString + (if (java) {
-      if (sym.paramLists.isEmpty) ""
-      else sym.paramLists.flatMap(_.map { sym => javaFqn(sym.tpe).mkString }).mkString("(", ", ", ")")
-    } else sym.signatureString.replaceAll("[\\s]", ""))
-  }
+  private def signatureString(sym: Symbol, java: Boolean): String =
+    if (!java)
+      sym.nameString + sym.signatureString.replaceAll("[\\s]", "")
+    else toFqn(sym) match {
+      case PackageName(parts) => ""
+      case ClassName(pkg, clazz) => ""
+      case FieldName(_, field) => field
+      case MethodName(_, method, desc) => method + desc.params.map {
+        case a: ArrayDescriptor => cleanClass(a.reifier.fqnString) + "[]"
+        case c: ClassName => cleanClass(c.fqnString)
+      }.mkString("(", ", ", ")")
+    }
 
   def docSignature(sym: Symbol, pos: Option[Position]): Option[DocSigPair] = {
     def docSig(java: Boolean) = {

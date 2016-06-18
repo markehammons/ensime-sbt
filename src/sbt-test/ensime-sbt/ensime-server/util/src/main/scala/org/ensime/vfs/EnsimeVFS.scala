@@ -46,6 +46,22 @@ object `package` {
   private val zipFileField = classOf[ZipFileSystem].getDeclaredField("zipFile")
   zipFileField.setAccessible(true)
 
+  object URLParamEncoder {
+    def encode(input: String): String = {
+      var ofs = 0
+      val resultStr = new StringBuilder()
+      while (ofs < input.length) {
+        val ch = input.charAt(ofs)
+        if ((ch == '+') || (ch == '%'))
+          resultStr.append("%%%02x".format(ch.toShort))
+        else
+          resultStr.append(ch)
+        ofs += 1
+      }
+      resultStr.toString
+    }
+  }
+
   implicit class RichVFS(val vfs: DefaultFileSystemManager) extends AnyVal {
     implicit def toFileObject(f: File): FileObject = vfile(f)
 
@@ -60,14 +76,18 @@ object `package` {
       vfs.toFileObject(file)
     )
     def vres(path: String) = withContext(s"$path =>")(
-      vfs.resolveFile(("res:" + path).intern)
+      vfs.resolveFile(asUri("res", path).intern)
     )
-    def vjar(jar: File) = withContext(s"$jar =>")(
-      vfs.resolveFile(("jar:" + jar.getAbsolutePath).intern)
-    )
+    def vjar(jar: File) = withContext(s"$jar =>") {
+      vfs.resolveFile(asUri("jar", jar.getAbsolutePath).intern)
+    }
     def vjar(jar: FileObject) = withContext(s"$jar =>")(
       vfs.resolveFile(("jar:" + jar.getName.getURI).intern)
     )
+
+    private def asUri(scheme: String, path: String): String = {
+      s"${scheme}:${URLParamEncoder.encode(path)}"
+    }
 
     // WORKAROUND https://issues.apache.org/jira/browse/VFS-594
     def nuke(jar: FileObject) = {
