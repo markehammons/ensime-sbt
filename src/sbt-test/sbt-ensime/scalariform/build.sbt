@@ -13,5 +13,5 @@ ScalariformKeys.preferences := FormattingPreferences
   .setPreference(PlaceScaladocAsterisksBeneathSecondAsterisk, true)
   .setPreference(AlignSingleLineCaseStatements.MaxArrowIndent, 20)
 
-scalaVersion := "2.11.7"
+scalaVersion := "2.11.8"
 scalacOptions in Compile := Seq("-Xlog-reflective-calls")

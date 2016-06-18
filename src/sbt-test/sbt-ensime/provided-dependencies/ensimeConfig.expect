@@ -1,13 +1,13 @@
 (
  :root-dir "BASE_DIR"
  :cache-dir "BASE_DIR/.ensime_cache"
- :scala-compiler-jars ("IVY_DIR/cache/org.scala-lang/scala-compiler/jars/scala-compiler-2.11.7.jar" "IVY_DIR/cache/org.scala-lang/scala-library/jars/scala-library-2.11.7.jar" "IVY_DIR/cache/org.scala-lang/scala-reflect/jars/scala-reflect-2.11.7.jar" "IVY_DIR/cache/org.scala-lang/scalap/jars/scalap-2.11.7.jar")
+ :scala-compiler-jars ("IVY_DIR/cache/org.scala-lang/scala-compiler/jars/scala-compiler-2.11.8.jar" "IVY_DIR/cache/org.scala-lang/scala-library/jars/scala-library-2.11.8.jar" "IVY_DIR/cache/org.scala-lang/scala-reflect/jars/scala-reflect-2.11.8.jar" "IVY_DIR/cache/org.scala-lang/scalap/jars/scalap-2.11.8.jar")
  :name "provided-dependencies"
  :java-home "JDK_HOME"
  :java-flags ("-XX:MaxPermSize=256m" "-Xmx2g" "-Xss2m")
  :java-compiler-args nil
  :reference-source-roots ("JDK_HOME/src.zip")
- :scala-version "2.11.7"
+ :scala-version "2.11.8"
  :compiler-args ("-Xlog-reflective-calls" "-feature" "-deprecation" "-Xlint" "-Yinline-warnings" "-Yno-adapted-args" "-Ywarn-dead-code" "-Ywarn-numeric-widen" "-Xfuture" "-Ywarn-unused-import" "-Ymacro-expand:discard")
  :formatting-prefs nil
  :disable-source-monitoring nil
@@ -18,9 +18,9 @@
  :targets ("BASE_DIR/target/scala-2.11/classes")
  :test-targets ("BASE_DIR/target/scala-2.11/test-classes")
  :depends-on-modules nil
- :compile-deps ("IVY_DIR/cache/commons-io/commons-io/jars/commons-io-2.5.jar" "IVY_DIR/cache/com.google.guava/guava/bundles/guava-19.0.jar" "IVY_DIR/cache/org.scala-lang/scala-library/jars/scala-library-2.11.7.jar")
+ :compile-deps ("IVY_DIR/cache/commons-io/commons-io/jars/commons-io-2.5.jar" "IVY_DIR/cache/com.google.guava/guava/bundles/guava-19.0.jar" "IVY_DIR/cache/org.scala-lang/scala-library/jars/scala-library-2.11.8.jar")
  :runtime-deps nil
  :test-deps nil
- :doc-jars ("IVY_DIR/cache/commons-io/commons-io/docs/commons-io-2.5-javadoc.jar" "IVY_DIR/cache/com.google.guava/guava/docs/guava-19.0-javadoc.jar" "BASE_DIR/target/scala-2.11/provided-dependencies_2.11-0.1-SNAPSHOT-javadoc.jar" "IVY_DIR/cache/org.scala-lang/scala-library/docs/scala-library-2.11.7-javadoc.jar")
- :reference-source-roots ("IVY_DIR/cache/commons-io/commons-io/srcs/commons-io-2.5-sources.jar" "IVY_DIR/cache/com.google.guava/guava/srcs/guava-19.0-sources.jar" "IVY_DIR/cache/org.scala-lang/scala-library/srcs/scala-library-2.11.7-sources.jar")))
+ :doc-jars ("IVY_DIR/cache/commons-io/commons-io/docs/commons-io-2.5-javadoc.jar" "IVY_DIR/cache/com.google.guava/guava/docs/guava-19.0-javadoc.jar" "BASE_DIR/target/scala-2.11/provided-dependencies_2.11-0.1-SNAPSHOT-javadoc.jar" "IVY_DIR/cache/org.scala-lang/scala-library/docs/scala-library-2.11.8-javadoc.jar")
+ :reference-source-roots ("IVY_DIR/cache/commons-io/commons-io/srcs/commons-io-2.5-sources.jar" "IVY_DIR/cache/com.google.guava/guava/srcs/guava-19.0-sources.jar" "IVY_DIR/cache/org.scala-lang/scala-library/srcs/scala-library-2.11.8-sources.jar")))
 )
