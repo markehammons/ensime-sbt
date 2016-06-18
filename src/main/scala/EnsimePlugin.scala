@@ -38,9 +38,6 @@ object Imports {
     val ensimeJavaFlags = TaskKey[Seq[String]](
       "Flags to be passed to ENSIME JVM process."
     )
-    val ensimeScalariform = settingKey[IFormattingPreferences](
-      "Scalariform formatting preferences to use in ENSIME."
-    )
 
     val ensimeUseTarget = taskKey[Option[File]](
       "Use a calculated jar instead of the class directory. " +
@@ -94,6 +91,12 @@ object Imports {
       "A function that is applied to a generated ENSIME project config. Equivalent of 'configTransformer' task, " +
         "on the build level."
     )
+
+    // exploiting a single namespace to workaround https://github.com/ensime/ensime-sbt/issues/148
+    val scalariformPreferences: SettingKey[IFormattingPreferences] =
+      settingKey[IFormattingPreferences](
+        "Scalariform formatting preferences, e.g. indentation"
+      )
   }
 }
 
@@ -119,12 +122,16 @@ object EnsimePlugin extends AutoPlugin {
     commands += Command.command("gen-ensime-project", "", "Generate a project/.ensime for the project definition.")(genEnsimeProject),
     commands += Command.command("debugging-off", "", "Remove debugging flags from all forked JVM processes.")(debugging_off(false)),
 
+    // WORKAROUND https://github.com/ensime/ensime-sbt/issues/148
+    EnsimeKeys.scalariformPreferences := EnsimeKeys.scalariformPreferences.?.value.getOrElse {
+      FormattingPreferences()
+    },
+
     EnsimeKeys.ensimeDebuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
     EnsimeKeys.ensimeDebuggingPort := 5005,
     EnsimeKeys.ensimeJavaFlags := JavaFlags,
     EnsimeKeys.ensimeCompilerProjectArgs := Seq(), // https://github.com/ensime/ensime-sbt/issues/98
     EnsimeKeys.ensimeAdditionalProjectCompilerArgs := defaultCompilerFlags(Properties.versionNumberString),
-    EnsimeKeys.ensimeScalariform := FormattingPreferences(),
     EnsimeKeys.ensimeDisableSourceMonitoring := false,
     EnsimeKeys.ensimeDisableClassMonitoring := false,
     EnsimeKeys.ensimeMegaUpdate <<= Keys.state.flatMap { implicit s =>
@@ -396,7 +403,7 @@ object EnsimePlugin extends AutoPlugin {
 
     val javaFlags = EnsimeKeys.ensimeJavaFlags.run.toList
 
-    val formatting = EnsimeKeys.ensimeScalariform.gimmeOpt
+    val formatting = EnsimeKeys.scalariformPreferences.gimmeOpt
     val disableSourceMonitoring = (EnsimeKeys.ensimeDisableSourceMonitoring).gimme
     val disableClassMonitoring = (EnsimeKeys.ensimeDisableClassMonitoring).gimme
 
@@ -571,8 +578,8 @@ object EnsimePlugin extends AutoPlugin {
     val out = root / ".ensime"
     val cacheDir = root / ".ensime_cache"
     val name = EnsimeKeys.ensimeName.gimmeOpt.getOrElse {
-      file(Properties.userDir).getName + "-project"
-    }
+      file(Properties.userDir).getName
+    } + "-project"
 
     val compilerArgs = {
       EnsimeKeys.ensimeCompilerProjectArgs.run.toList ++
@@ -587,7 +594,7 @@ object EnsimePlugin extends AutoPlugin {
 
     val javaCompilerArgs = (javacOptions in Compile).run.toList
 
-    val formatting = EnsimeKeys.ensimeScalariform.gimmeOpt
+    val formatting = EnsimeKeys.scalariformPreferences.gimmeOpt
 
     val module = EnsimeModule(
       name, Set(root), Set.empty, targets.toSet, Set.empty, Set.empty,
