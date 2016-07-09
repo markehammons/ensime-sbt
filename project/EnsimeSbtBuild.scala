@@ -14,7 +14,7 @@ object EnsimeSbtBuild extends Build {
 
   override val settings = super.settings ++ Seq(
     organization := "org.ensime",
-    version := "0.6.1-SNAPSHOT"
+    version := "1.0.0-SNAPSHOT"
   ) ++ sonatype("ensime", "ensime-sbt", Apache2)
 
   lazy val root = Project("sbt-ensime", file(".")).
@@ -32,9 +32,7 @@ object EnsimeSbtBuild extends Build {
         // .jvmopts is ignored, simulate here
         "-XX:MaxPermSize=256m", "-Xmx2g", "-Xss2m"
       ),
-      scriptedBufferLog := false,
-      // WORKAROUND https://github.com/sbt/sbt/issues/2253
-      fullResolvers -= Resolver.jcenterRepo
+      scriptedBufferLog := false
     )
 
 }
