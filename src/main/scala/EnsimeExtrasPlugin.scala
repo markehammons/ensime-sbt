@@ -6,7 +6,7 @@ import sbt._
 import Keys._
 import complete.{DefaultParsers, Parser}
 
-object EnsimeExtraPluginKeys {
+object EnsimeExtrasKeys {
 
   case class JavaArgs(mainClass: String, envArgs: Map[String, String], jvmArgs: Seq[String], classArgs: Seq[String])
   case class LaunchConfig(name: String, javaArgs: JavaArgs)
@@ -38,12 +38,12 @@ object EnsimeExtraPluginKeys {
 
 }
 
-object EnsimeExtraPlugin extends AutoPlugin {
-  import EnsimeExtraPluginKeys._
+object EnsimeExtrasPlugin extends AutoPlugin {
+  import EnsimeExtrasKeys._
 
   override def requires = EnsimePlugin
   override def trigger = allRequirements
-  val autoImport = EnsimeExtraPluginKeys
+  val autoImport = EnsimeExtrasKeys
 
   override lazy val projectSettings = Seq(
     ensimeRunMain <<= parseAndRunMainWithSettings(),
@@ -51,6 +51,7 @@ object EnsimeExtraPlugin extends AutoPlugin {
       // it would be good if this could reference Settings...
       extraArgs = Seq(s"-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005")
     ),
+    ensimeLaunchConfigurations := Nil,
     ensimeLaunch <<= launchTask,
     aggregate in ensimeCompileOnly := false
   ) ++ Seq(Compile, Test).flatMap { config =>

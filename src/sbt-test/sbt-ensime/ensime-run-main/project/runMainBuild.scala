@@ -4,8 +4,8 @@
 import sbt._
 import Keys._
 import Def.Initialize
-import org.ensime.EnsimeExtraPlugin
-import org.ensime.EnsimeExtraPluginKeys._
+import org.ensime.EnsimeExtrasPlugin
+import org.ensime.EnsimeExtrasKeys._
 
 object runMainBuild extends Build {
 
@@ -19,7 +19,7 @@ object runMainBuild extends Build {
       fork := true,
       javaOptions += "-Dtesting_default_key1=default_value1",
       envVars += ("testing_default_key2", "default_value2"),
-      ensimeRunDebug <<= EnsimeExtraPlugin.parseAndRunMainWithSettings(
+      ensimeRunDebug <<= EnsimeExtrasPlugin.parseAndRunMainWithSettings(
         // suspend=n otherwise we hang forever...
         extraArgs = Seq(s"-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005")
       ),
