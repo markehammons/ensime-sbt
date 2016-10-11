@@ -11,6 +11,13 @@ object EnsimeExtrasKeys {
   case class JavaArgs(mainClass: String, envArgs: Map[String, String], jvmArgs: Seq[String], classArgs: Seq[String])
   case class LaunchConfig(name: String, javaArgs: JavaArgs)
 
+  val ensimeDebuggingFlag = SettingKey[String](
+    "JVM flag to enable remote debugging of forked tasks."
+  )
+  val ensimeDebuggingPort = SettingKey[Int](
+    "Port for remote debugging of forked tasks."
+  )
+
   val ensimeCompileOnly = InputKey[Unit](
     "ensimeCompileOnly",
     "Compiles a single scala file"
@@ -20,7 +27,6 @@ object EnsimeExtrasKeys {
     "ensimeRunMain",
     "Run user specified env/args/class/params (e.g. `ensimeRunMain FOO=BAR -Xmx2g foo.Bar baz')"
   )
-
   val ensimeRunDebug = InputKey[Unit](
     "ensimeRunDebug",
     "Run user specified env/args/class/params with debugging flags added"
@@ -30,7 +36,6 @@ object EnsimeExtrasKeys {
     "ensimeLaunchConfigurations",
     "Named applications with canned env/args/class/params"
   )
-
   val ensimeLaunch = InputKey[Unit](
     "ensimeLaunch",
     "Launch a named application in ensimeLaunchConfigurations"
@@ -45,7 +50,14 @@ object EnsimeExtrasPlugin extends AutoPlugin {
   override def trigger = allRequirements
   val autoImport = EnsimeExtrasKeys
 
+  override lazy val buildSettings = Seq(
+    commands += Command.command("debugging", "", "Add debugging flags to all forked JVM processes.")(toggleDebugging(true)),
+    commands += Command.command("debuggingOff", "", "Remove debugging flags from all forked JVM processes.")(toggleDebugging(false))
+  )
+
   override lazy val projectSettings = Seq(
+    ensimeDebuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
+    ensimeDebuggingPort := 5005,
     ensimeRunMain <<= parseAndRunMainWithSettings(),
     ensimeRunDebug <<= parseAndRunMainWithSettings(
       // it would be good if this could reference Settings...
@@ -181,4 +193,32 @@ object EnsimeExtrasPlugin extends AutoPlugin {
           }
         }
     }
+
+  // it would be good if debuggingOff was automatically triggered
+  // https://stackoverflow.com/questions/32350617
+  def toggleDebugging(enable: Boolean): State => State = { implicit state: State =>
+    import CommandSupport._
+    val extracted = Project.extract(state)
+
+    implicit val pr = extracted.currentRef
+    implicit val bs = extracted.structure
+
+    if (enable) {
+      val port = ensimeDebuggingPort.gimme
+      log.warn(s"Enabling debugging for all forked processes on port $port")
+      log.info("Only one process can use the port and it will await a connection before proceeding.")
+    }
+
+    val newSettings = extracted.structure.allProjectRefs map { proj =>
+      val orig = (javaOptions in proj).run
+      val debugFlags = ((ensimeDebuggingFlag in proj).gimme + (ensimeDebuggingPort in proj).gimme)
+      val withoutDebug = orig.diff(List(debugFlags))
+      val withDebug = withoutDebug :+ debugFlags
+      val rewritten = if (enable) withDebug else withoutDebug
+
+      (javaOptions in proj) := rewritten
+    }
+    extracted.append(newSettings, state)
+  }
+
 }
