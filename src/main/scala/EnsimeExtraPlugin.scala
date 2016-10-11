@@ -4,12 +4,17 @@ package org.ensime
 
 import sbt._
 import Keys._
-import sbt.complete.{DefaultParsers, Parser}
+import complete.{DefaultParsers, Parser}
 
 object EnsimeExtraPluginKeys {
 
   case class JavaArgs(mainClass: String, envArgs: Map[String, String], jvmArgs: Seq[String], classArgs: Seq[String])
   case class LaunchConfig(name: String, javaArgs: JavaArgs)
+
+  val ensimeCompileOnly = InputKey[Unit](
+    "ensimeCompileOnly",
+    "Compiles a single scala file"
+  )
 
   val ensimeRunMain = InputKey[Unit](
     "ensimeRunMain",
@@ -46,8 +51,17 @@ object EnsimeExtraPlugin extends AutoPlugin {
       // it would be good if this could reference Settings...
       extraArgs = Seq(s"-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005")
     ),
-    ensimeLaunch <<= launchTask
-  )
+    ensimeLaunch <<= launchTask,
+    aggregate in ensimeCompileOnly := false
+  ) ++ Seq(Compile, Test).flatMap { config =>
+      // WORKAROUND https://github.com/sbt/sbt/issues/2580
+      inConfig(config) {
+        Seq(
+          ensimeCompileOnly <<= compileOnlyTask,
+          scalacOptions in ensimeCompileOnly := scalacOptions.value
+        )
+      }
+    }
 
   val ensimeRunMainTaskParser: Parser[JavaArgs] = {
     import DefaultParsers._
@@ -105,4 +119,65 @@ object EnsimeExtraPlugin extends AutoPlugin {
       })
     }
   }
+
+  private val noChanges = new xsbti.compile.DependencyChanges {
+    def isEmpty = true
+    def modifiedBinaries = Array()
+    def modifiedClasses = Array()
+  }
+  private object noopCallback extends xsbti.AnalysisCallback {
+    val includeSynthToNameHashing: Boolean = true
+    override val nameHashing: Boolean = true
+    def beginSource(source: File): Unit = {}
+    def generatedClass(source: File, module: File, name: String): Unit = {}
+    def api(sourceFile: File, source: xsbti.api.SourceAPI): Unit = {}
+    def sourceDependency(dependsOn: File, source: File, publicInherited: Boolean): Unit = {}
+    def binaryDependency(binary: File, name: String, source: File, publicInherited: Boolean): Unit = {}
+    def endSource(sourcePath: File): Unit = {}
+    def problem(what: String, pos: xsbti.Position, msg: String, severity: xsbti.Severity, reported: Boolean): Unit = {}
+    def usedName(sourceFile: File, names: String): Unit = {}
+    override def binaryDependency(file: File, s: String, file1: File, dependencyContext: xsbti.DependencyContext): Unit = {}
+    override def sourceDependency(file: File, file1: File, dependencyContext: xsbti.DependencyContext): Unit = {}
+  }
+
+  // DEPRECATED with no alternative https://github.com/sbt/sbt/issues/2417
+  def compileOnlyTask: Def.Initialize[InputTask[Unit]] = InputTask(
+    (s: State) => Def.spaceDelimited()
+  ) { (argTask: TaskKey[Seq[String]]) =>
+      (
+        argTask,
+        sourceDirectories,
+        dependencyClasspath,
+        classDirectory,
+        scalacOptions in ensimeCompileOnly,
+        maxErrors,
+        compileInputs in compile,
+        compilers,
+        streams
+      ).map { (args, dirs, cp, out, opts, merrs, in, cs, s) =>
+          if (args.isEmpty) throw new IllegalArgumentException("needs a file")
+          args.foreach { arg =>
+            val input: File = file(arg).getCanonicalFile
+            val sourceDirs = dirs.map(_.getCanonicalFile)
+
+            val here = sourceDirs.exists { dir => input.getPath.startsWith(dir.getPath) }
+            if (!here || !input.exists())
+              throw new IllegalArgumentException(s"$arg not associated to $sourceDirs")
+
+            // there is no reason why we couldn't compileOnly other
+            // languages, but they would require explicit support.
+            // Java shouldn't be too hard if somebody wants it.
+            if (!input.getName.endsWith(".scala"))
+              throw new IllegalArgumentException(s"only .scala files are supported: $arg")
+
+            if (!out.exists()) IO.createDirectory(out)
+            s.log.info(s"""Compiling $input with ${opts.mkString(" ")}""")
+
+            cs.scalac(
+              Seq(input), noChanges, cp.map(_.data) :+ out, out, opts,
+              noopCallback, merrs, in.incSetup.cache, s.log
+            )
+          }
+        }
+    }
 }
