@@ -65,14 +65,6 @@ object Imports {
       "Additional arguments for the project definition presentation compiler."
     )
 
-    // for debugging
-    val ensimeDebuggingFlag = SettingKey[String](
-      "JVM flag to enable remote debugging of forked tasks."
-    )
-    val ensimeDebuggingPort = SettingKey[Int](
-      "Port for remote debugging of forked tasks."
-    )
-
     val ensimeUnmanagedSourceArchives = SettingKey[Seq[File]](
       "Source jars (and zips) to complement unmanagedClasspath. May be set for the project and its submodules."
     )
@@ -114,21 +106,12 @@ object EnsimePlugin extends AutoPlugin {
   override lazy val buildSettings = Seq(
     commands += Command.args("ensimeConfig", ("", ""), "Generate a .ensime for the project.", "proj1 proj2")(ensimeConfig),
     commands += Command.command("ensimeConfigProject", "", "Generate a project/.ensime for the project definition.")(ensimeConfigProject),
-    commands += Command.command("debugging", "", "Add debugging flags to all forked JVM processes.")(toggleDebugging(true)),
-    commands += Command.command("debuggingOff", "", "Remove debugging flags from all forked JVM processes.")(toggleDebugging(false)),
-
-    // deprecating in 1.0
-    commands += Command.args("gen-ensime", ("", ""), "Generate a .ensime for the project.", "proj1 proj2")(genEnsime),
-    commands += Command.command("gen-ensime-project", "", "Generate a project/.ensime for the project definition.")(genEnsimeProject),
-    commands += Command.command("debugging-off", "", "Remove debugging flags from all forked JVM processes.")(debugging_off(false)),
 
     // WORKAROUND https://github.com/ensime/ensime-sbt/issues/148
     EnsimeKeys.scalariformPreferences := EnsimeKeys.scalariformPreferences.?.value.getOrElse {
       FormattingPreferences()
     },
 
-    EnsimeKeys.ensimeDebuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
-    EnsimeKeys.ensimeDebuggingPort := 5005,
     EnsimeKeys.ensimeJavaFlags := JavaFlags,
     EnsimeKeys.ensimeCompilerProjectArgs := Seq(), // https://github.com/ensime/ensime-sbt/issues/98
     EnsimeKeys.ensimeAdditionalProjectCompilerArgs := defaultCompilerFlags(Properties.versionNumberString),
@@ -277,44 +260,6 @@ object EnsimePlugin extends AutoPlugin {
           }
         }
     }
-
-  private def logDeprecatedCommand(old: String, replacement: String): State => State = {
-    state =>
-      state.globalLogging.full.error(s"`$old' is deprecated and will be removed. Use `$replacement' instead.")
-      state
-  }
-  def debugging_off(enable: Boolean): State => State = toggleDebugging(enable) andThen logDeprecatedCommand("debugging-off", "debuggingOff")
-  def genEnsime: (State, Seq[String]) => State = { (state: State, args: Seq[String]) =>
-    ensimeConfig(state, args)
-    logDeprecatedCommand("gen-ensime", "ensimeConfig")(state)
-  }
-  def genEnsimeProject: State => State = ensimeConfigProject andThen logDeprecatedCommand("gen-ensime-project", "ensimeConfigProject")
-
-  // it would be good if debuggingOff was automatically triggered
-  // https://stackoverflow.com/questions/32350617
-  def toggleDebugging(enable: Boolean): State => State = { implicit state: State =>
-    val extracted = Project.extract(state)
-
-    implicit val pr = extracted.currentRef
-    implicit val bs = extracted.structure
-
-    if (enable) {
-      val port = EnsimeKeys.ensimeDebuggingPort.gimme
-      log.warn(s"Enabling debugging for all forked processes on port $port")
-      log.info("Only one process can use the port and it will await a connection before proceeding.")
-    }
-
-    val newSettings = extracted.structure.allProjectRefs map { proj =>
-      val orig = (javaOptions in proj).run
-      val debugFlags = ((EnsimeKeys.ensimeDebuggingFlag in proj).gimme + (EnsimeKeys.ensimeDebuggingPort in proj).gimme)
-      val withoutDebug = orig.diff(List(debugFlags))
-      val withDebug = withoutDebug :+ debugFlags
-      val rewritten = if (enable) withDebug else withoutDebug
-
-      (javaOptions in proj) := rewritten
-    }
-    extracted.append(newSettings, state)
-  }
 
   def ensimeConfig: (State, Seq[String]) => State = { (state, args) =>
     val extracted = Project.extract(state)
