@@ -2,7 +2,6 @@
 // Licence: Apache-2.0
 package org.ensime
 
-import Imports._
 import SExpFormatter._
 import java.io.FileNotFoundException
 import java.lang.management.ManagementFactory
@@ -18,76 +17,73 @@ import scalariform.formatter.preferences._
 
 /**
  * Conventional way to define importable keys for an AutoPlugin.
- * Note that EnsimePlugin.autoImport == Imports
  */
-object Imports {
-  object EnsimeKeys {
-    // for ensimeConfig
-    val ensimeName = SettingKey[String](
-      "Name of the ENSIME project"
-    )
-    val ensimeCompilerArgs = TaskKey[Seq[String]](
-      "Arguments for the presentation compiler, extracted from the compiler flags."
-    )
+object EnsimeKeys {
+  // for ensimeConfig
+  val ensimeName = SettingKey[String](
+    "Name of the ENSIME project"
+  )
+  val ensimeCompilerArgs = TaskKey[Seq[String]](
+    "Arguments for the presentation compiler, extracted from the compiler flags."
+  )
 
-    val ensimeAdditionalCompilerArgs = TaskKey[Seq[String]](
-      "Additional arguments for the presentation compiler."
-    )
-    val ensimeJavaFlags = TaskKey[Seq[String]](
-      "Flags to be passed to ENSIME JVM process."
-    )
+  val ensimeAdditionalCompilerArgs = TaskKey[Seq[String]](
+    "Additional arguments for the presentation compiler."
+  )
+  val ensimeJavaFlags = TaskKey[Seq[String]](
+    "Flags to be passed to ENSIME JVM process."
+  )
 
-    val ensimeUseTarget = taskKey[Option[File]](
-      "Use a calculated jar instead of the class directory. " +
-        "Note that `proj/compile` does not produce the jar, change your workflow to use `proj/packageBin`."
-    )
+  val ensimeUseTarget = taskKey[Option[File]](
+    "Use a calculated jar instead of the class directory. " +
+      "Note that `proj/compile` does not produce the jar, change your workflow to use `proj/packageBin`."
+  )
 
-    val ensimeDisableSourceMonitoring = settingKey[Boolean](
-      "Workaround temporary performance problems on large projects."
-    )
-    val ensimeDisableClassMonitoring = settingKey[Boolean](
-      "Workaround temporary performance problems on large projects."
-    )
+  val ensimeDisableSourceMonitoring = settingKey[Boolean](
+    "Workaround temporary performance problems on large projects."
+  )
+  val ensimeDisableClassMonitoring = settingKey[Boolean](
+    "Workaround temporary performance problems on large projects."
+  )
 
-    // used to start the REPL and assembly jar bundles of ensime-server.
-    // intransitive because we don't need parser combinators, scala.xml or jline
-    val ensimeScalaCompilerJarModuleIDs = settingKey[Seq[ModuleID]](
-      "The artefacts to resolve for :scala-compiler-jars in ensimeConfig."
-    )
+  // used to start the REPL and assembly jar bundles of ensime-server.
+  // intransitive because we don't need parser combinators, scala.xml or jline
+  val ensimeScalaCompilerJarModuleIDs = settingKey[Seq[ModuleID]](
+    "The artefacts to resolve for :scala-compiler-jars in ensimeConfig."
+  )
 
-    // for ensimeConfigProject
-    val ensimeCompilerProjectArgs = TaskKey[Seq[String]](
-      "Arguments for the project definition presentation compiler (not possible to extract)."
-    )
-    val ensimeAdditionalProjectCompilerArgs = TaskKey[Seq[String]](
-      "Additional arguments for the project definition presentation compiler."
-    )
+  // for ensimeConfigProject
+  val ensimeCompilerProjectArgs = TaskKey[Seq[String]](
+    "Arguments for the project definition presentation compiler (not possible to extract)."
+  )
+  val ensimeAdditionalProjectCompilerArgs = TaskKey[Seq[String]](
+    "Additional arguments for the project definition presentation compiler."
+  )
 
-    val ensimeUnmanagedSourceArchives = SettingKey[Seq[File]](
-      "Source jars (and zips) to complement unmanagedClasspath. May be set for the project and its submodules."
-    )
-    val ensimeUnmanagedJavadocArchives = SettingKey[Seq[File]](
-      "Documentation jars (and zips) to complement unmanagedClasspath. May only be set for submodules."
-    )
+  val ensimeUnmanagedSourceArchives = SettingKey[Seq[File]](
+    "Source jars (and zips) to complement unmanagedClasspath. May be set for the project and its submodules."
+  )
+  val ensimeUnmanagedJavadocArchives = SettingKey[Seq[File]](
+    "Documentation jars (and zips) to complement unmanagedClasspath. May only be set for submodules."
+  )
 
-    val ensimeMegaUpdate = TaskKey[Map[ProjectRef, (UpdateReport, UpdateReport)]](
-      "Runs the aggregated UpdateReport for `update' and `updateClassifiers' respectively."
-    )
-    val ensimeConfigTransformer = settingKey[EnsimeConfig => EnsimeConfig](
-      "A function that is applied to a generated ENSIME configuration. This transformer function " +
-        "can be used to add or filter any resulting config and can serve as a hook for other plugins."
-    )
-    val ensimeConfigTransformerProject = settingKey[EnsimeConfig => EnsimeConfig](
-      "A function that is applied to a generated ENSIME project config. Equivalent of 'configTransformer' task, " +
-        "on the build level."
-    )
+  val ensimeMegaUpdate = TaskKey[Map[ProjectRef, (UpdateReport, UpdateReport)]](
+    "Runs the aggregated UpdateReport for `update' and `updateClassifiers' respectively."
+  )
+  val ensimeConfigTransformer = settingKey[EnsimeConfig => EnsimeConfig](
+    "A function that is applied to a generated ENSIME configuration. This transformer function " +
+      "can be used to add or filter any resulting config and can serve as a hook for other plugins."
+  )
+  val ensimeConfigTransformerProject = settingKey[EnsimeConfig => EnsimeConfig](
+    "A function that is applied to a generated ENSIME project config. Equivalent of 'configTransformer' task, " +
+      "on the build level."
+  )
 
-    // exploiting a single namespace to workaround https://github.com/ensime/ensime-sbt/issues/148
-    val scalariformPreferences: SettingKey[IFormattingPreferences] =
-      settingKey[IFormattingPreferences](
-        "Scalariform formatting preferences, e.g. indentation"
-      )
-  }
+  // exploiting a single namespace to workaround https://github.com/ensime/ensime-sbt/issues/148
+  val scalariformPreferences: SettingKey[IFormattingPreferences] =
+    settingKey[IFormattingPreferences](
+      "Scalariform formatting preferences, e.g. indentation"
+    )
 }
 
 object EnsimePlugin extends AutoPlugin {
@@ -96,8 +92,7 @@ object EnsimePlugin extends AutoPlugin {
   // ensures compiler settings are loaded before us
   override def requires = plugins.JvmPlugin
   override def trigger = allRequirements
-
-  val autoImport = Imports
+  val autoImport = EnsimeKeys
 
   val EnsimeInternal = config("ensime-internal").hide
 

@@ -6,8 +6,8 @@ scalaVersion := "2.11.8"
 import org.ensime.{EnsimeConfig, EnsimeModule}
 
 //add a dummy module to the config
-EnsimeKeys.ensimeConfigTransformer := {(cfg: EnsimeConfig) => {
-  val c = EnsimeKeys.ensimeConfigTransformer.value(cfg)
+ensimeConfigTransformer := {(cfg: EnsimeConfig) => {
+  val c = ensimeConfigTransformer.value(cfg)
   val dummyModule = EnsimeModule(
     name = "dummy",
     mainRoots = Set.empty,
@@ -25,8 +25,8 @@ EnsimeKeys.ensimeConfigTransformer := {(cfg: EnsimeConfig) => {
 }}
 
 //find the dummy module and change the name to "changed"
-EnsimeKeys.ensimeConfigTransformer := {(cfg: EnsimeConfig) => {
-  val c = EnsimeKeys.ensimeConfigTransformer.value(cfg)
+ensimeConfigTransformer := {(cfg: EnsimeConfig) => {
+  val c = ensimeConfigTransformer.value(cfg)
   val updatedModules: Map[String, EnsimeModule] = c.modules.map{
     case ("dummy", mod) => "changed" -> mod.copy(name = "changed")
     case (name, mod) => name -> mod
@@ -35,7 +35,7 @@ EnsimeKeys.ensimeConfigTransformer := {(cfg: EnsimeConfig) => {
 }}
 
 //add a dummy java flag to the project config
-EnsimeKeys.ensimeConfigTransformerProject := {(cfg: EnsimeConfig) => {
-  val c = EnsimeKeys.ensimeConfigTransformerProject.value(cfg)
+ensimeConfigTransformerProject := {(cfg: EnsimeConfig) => {
+  val c = ensimeConfigTransformerProject.value(cfg)
   c.copy(javaFlags = c.javaFlags ++ List("-Ddummy.flag"))
 }}
