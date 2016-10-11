@@ -9,37 +9,44 @@ import sbt.complete.{DefaultParsers, Parser}
 object EnsimeExtraPluginKeys {
 
   case class JavaArgs(mainClass: String, envArgs: Map[String, String], jvmArgs: Seq[String], classArgs: Seq[String])
-  case class AdditionalArgs(envArgs: Map[String, String], jvmArgs: Seq[String])
   case class LaunchConfig(name: String, javaArgs: JavaArgs)
 
   val ensimeRunMain = InputKey[Unit](
     "ensimeRunMain",
-    "Run user specified class with given jvm args and environment args that overrides system ones"
+    "Run user specified env/args/class/params (e.g. `ensimeRunMain FOO=BAR -Xmx2g foo.Bar baz')"
   )
 
   val ensimeRunDebug = InputKey[Unit](
     "ensimeRunDebug",
-    "Run user specified class with given jvm args, environment args and debug flags"
+    "Run user specified env/args/class/params with debugging flags added"
   )
 
-  val launchConfigurations = SettingKey[Seq[LaunchConfig]](
-    "launchConfigurations",
-    "Configurations with special arguments and main classes for launch command"
+  val ensimeLaunchConfigurations = SettingKey[Seq[LaunchConfig]](
+    "ensimeLaunchConfigurations",
+    "Named applications with canned env/args/class/params"
   )
 
-  val launch = InputKey[Unit](
-    "launch",
-    "Launch specific configurations described in launchConfigurations"
+  val ensimeLaunch = InputKey[Unit](
+    "ensimeLaunch",
+    "Launch a named application in ensimeLaunchConfigurations"
   )
+
 }
 
 object EnsimeExtraPlugin extends AutoPlugin {
   import EnsimeExtraPluginKeys._
 
+  override def requires = EnsimePlugin
+  override def trigger = allRequirements
+  val autoImport = EnsimeExtraPluginKeys
+
   override lazy val projectSettings = Seq(
-    ensimeRunMain <<= ensimeRunMainTask,
-    ensimeRunDebug <<= ensimeRunDebugTask,
-    launch <<= launchTask
+    ensimeRunMain <<= parseAndRunMainWithSettings(),
+    ensimeRunDebug <<= parseAndRunMainWithSettings(
+      // it would be good if this could reference Settings...
+      extraArgs = Seq(s"-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005")
+    ),
+    ensimeLaunch <<= launchTask
   )
 
   val ensimeRunMainTaskParser: Parser[JavaArgs] = {
@@ -60,12 +67,15 @@ object EnsimeExtraPlugin extends AutoPlugin {
     }
   }
 
-  private def parseAndRunMainWithSettings(additionalArgs: AdditionalArgs): Def.Initialize[InputTask[Unit]] = {
+  def parseAndRunMainWithSettings(
+    extraEnv: Map[String, String] = Map.empty,
+    extraArgs: Seq[String] = Seq.empty
+  ): Def.Initialize[InputTask[Unit]] = {
     val parser = (s: State) => ensimeRunMainTaskParser
     Def.inputTask {
       val givenArgs = parser.parsed
-      val newJvmArgs = (javaOptions.value ++ additionalArgs.jvmArgs ++ givenArgs.jvmArgs).distinct
-      val newEnvArgs = envVars.value ++ additionalArgs.envArgs ++ givenArgs.envArgs
+      val newJvmArgs = (javaOptions.value ++ extraArgs ++ givenArgs.jvmArgs).distinct
+      val newEnvArgs = envVars.value ++ extraEnv ++ givenArgs.envArgs
       toError(new ForkRun(ForkOptions(runJVMOptions = newJvmArgs, envVars = newEnvArgs)).run(
         givenArgs.mainClass,
         Attributed.data((fullClasspath in Compile).value),
@@ -75,21 +85,13 @@ object EnsimeExtraPlugin extends AutoPlugin {
     }
   }
 
-  def ensimeRunMainTask: Def.Initialize[InputTask[Unit]] = {
-    parseAndRunMainWithSettings(AdditionalArgs(Map.empty, Seq.empty))
-  }
-
-  def ensimeRunDebugTask: Def.Initialize[InputTask[Unit]] = {
-    parseAndRunMainWithSettings(AdditionalArgs(Map.empty, Seq("-Xdebug")))
-  }
-
   def launchTask: Def.Initialize[InputTask[Unit]] = {
     Def.inputTask {
       val configs = Def.spaceDelimited().parsed
       configs.foreach(name => {
-        val configByName = launchConfigurations.value.find(_.name == name)
+        val configByName = ensimeLaunchConfigurations.value.find(_.name == name)
         configByName.fold(
-          sLog.value.info(s"There isn't such configuration: $name")
+          sLog.value.warn(s"No launch configuration '$name'")
         )(config => {
             sLog.value.info(s"Running $name")
             val args = config.javaArgs

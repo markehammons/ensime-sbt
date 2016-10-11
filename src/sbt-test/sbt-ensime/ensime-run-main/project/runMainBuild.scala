@@ -14,13 +14,16 @@ object runMainBuild extends Build {
   )
 
   val root = Project("ensime-run-main", file("."))
-    .enablePlugins(EnsimeExtraPlugin)
     .settings(
       ivyLoggingLevel := UpdateLogging.Quiet,
       fork := true,
       javaOptions += "-Dtesting_default_key1=default_value1",
-      envVars += ("testing_default_key2", "defaule_value2"),
-      launchConfigurations := Seq(
+      envVars += ("testing_default_key2", "default_value2"),
+      ensimeRunDebug <<= EnsimeExtraPlugin.parseAndRunMainWithSettings(
+        // suspend=n otherwise we hang forever...
+        extraArgs = Seq(s"-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005")
+      ),
+      ensimeLaunchConfigurations := Seq(
         LaunchConfig(
           "test",
           JavaArgs(
