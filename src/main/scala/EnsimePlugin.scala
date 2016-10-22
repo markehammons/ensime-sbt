@@ -111,7 +111,7 @@ object EnsimePlugin extends AutoPlugin {
 
     // would be nice to infer by majority vote
     // https://github.com/ensime/ensime-sbt/issues/235
-    ensimeScalaVersion := (scalaVersion in ThisBuild).value,
+    ensimeScalaVersion := scalaVersion.value,
 
     ensimeJavaFlags := JavaFlags,
     // unable to infer the user's scalac options: https://github.com/ensime/ensime-sbt/issues/98
@@ -156,7 +156,7 @@ object EnsimePlugin extends AutoPlugin {
 
     ensimeScalacOptions := (
       (scalacOptions in Compile).value ++
-      ensimeSuggestedScalacOptions((ensimeScalaVersion).value)
+      ensimeSuggestedScalacOptions((ensimeScalaVersion in ThisBuild).value)
     ).distinct,
     ensimeJavacOptions := (javacOptions in Compile).value,
 
@@ -168,10 +168,10 @@ object EnsimePlugin extends AutoPlugin {
     ensimeScalaCompilerJarModuleIDs := {
       if (organization.value == scalaOrganization.value) Nil
       else Seq(
-        scalaOrganization.value % "scala-compiler" % ensimeScalaVersion.value,
-        scalaOrganization.value % "scala-library" % ensimeScalaVersion.value,
-        scalaOrganization.value % "scala-reflect" % ensimeScalaVersion.value,
-        scalaOrganization.value % "scalap" % ensimeScalaVersion.value
+        scalaOrganization.value % "scala-compiler" % (ensimeScalaVersion in ThisBuild).value,
+        scalaOrganization.value % "scala-library" % (ensimeScalaVersion in ThisBuild).value,
+        scalaOrganization.value % "scala-reflect" % (ensimeScalaVersion in ThisBuild).value,
+        scalaOrganization.value % "scalap" % (ensimeScalaVersion in ThisBuild).value
       ).map(_ % EnsimeInternal.name intransitive ())
     },
     libraryDependencies ++= ensimeScalaCompilerJarModuleIDs.value
@@ -234,10 +234,13 @@ object EnsimePlugin extends AutoPlugin {
       artifact = artifactFilter(extension = Artifact.DefaultExtension)
     ).toSet
 
+    // for some reason this gives the wrong number in projectData
+    val ensimeScalaV = (ensimeScalaVersion in ThisBuild).gimme
+
     implicit val rawModules = projects.collect {
       case (ref, proj) =>
         val (updateReport, updateClassifiersReport) = updateReports(ref)
-        val module = projectData(proj, updateReport, updateClassifiersReport)(ref, bs, state)
+        val module = projectData(ensimeScalaV, proj, updateReport, updateClassifiersReport)(ref, bs, state)
         (module.name, module)
     }.toMap
 
@@ -277,8 +280,8 @@ object EnsimePlugin extends AutoPlugin {
     val formatting = scalariformPreferences.gimmeOpt
     val disableSourceMonitoring = (ensimeDisableSourceMonitoring).gimme
     val disableClassMonitoring = (ensimeDisableClassMonitoring).gimme
-    val sourceMode = (ensimeSourceMode).gimme
-    val scalaVersion = (ensimeScalaVersion).gimme
+    val sourceMode = (ensimeSourceMode in ThisBuild).gimme
+    val scalaVersion = (ensimeScalaVersion in ThisBuild).gimme
 
     val config = EnsimeConfig(
       root, cacheDir,
@@ -319,6 +322,7 @@ object EnsimePlugin extends AutoPlugin {
   }
 
   def projectData(
+    ensimeScalaV: String,
     project: ResolvedProject,
     updateReport: UpdateReport,
     updateClassifiersReport: UpdateReport
@@ -395,11 +399,10 @@ object EnsimePlugin extends AutoPlugin {
     val jarSrcs = testPhases.flatMap(jarSrcsFor) ++ jarSrcsFor(Provided)
     val jarDocs = testPhases.flatMap(jarDocsFor) ++ jarDocsFor(Provided) ++ myDoc
 
-    val ensimeScalaV = (ensimeScalaVersion in ThisBuild).gimme
     if (scalaVersion.gimme != ensimeScalaV) {
       if (System.getProperty("ensime.sbt.debug") != null) {
         // for testing
-        IO.touch(file("scalaVersionAtStartupWarning"))
+        IO.write(file("scalaVersionAtStartupWarning"), ensimeScalaV)
       }
 
       log.error(

@@ -9,4 +9,4 @@ ensimeSourceMode := true
 
 // and not only a custom scalaOrganization, but a different version of
 // scala for ensime (uses the same org as the build)
-ensimeScalaVersion := "2.11.8"
+ensimeScalaVersion in ThisBuild := "2.11.8"

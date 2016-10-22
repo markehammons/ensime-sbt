@@ -1,4 +1,6 @@
 > ensimeConfig
+$ exists scalaVersionAtStartupWarning
+$ must-mirror scalaVersionAtStartupWarning.expect scalaVersionAtStartupWarning
 > ensimeExpect .ensime ensimeConfig.expect
 > ensimeConfigProject
 > ensimeExpect project/.ensime ensimeConfigProject.expect
