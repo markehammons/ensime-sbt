@@ -20,17 +20,17 @@ import scalariform.formatter.preferences._
  */
 object EnsimeKeys {
   // for ensimeConfig
-  val ensimeName = SettingKey[String](
+  val ensimeName = settingKey[String](
     "Name of the ENSIME project"
   )
-  val ensimeScalacOptions = TaskKey[Seq[String]](
+  val ensimeScalacOptions = taskKey[Seq[String]](
     "Arguments for the scala presentation compiler, extracted from the compiler flags."
   )
-  val ensimeJavacOptions = TaskKey[Seq[String]](
+  val ensimeJavacOptions = taskKey[Seq[String]](
     "Arguments for the java presentation compiler, extracted from the compiler flags."
   )
 
-  val ensimeJavaFlags = TaskKey[Seq[String]](
+  val ensimeJavaFlags = taskKey[Seq[String]](
     "Flags to be passed to ENSIME JVM process."
   )
 
@@ -57,18 +57,18 @@ object EnsimeKeys {
   )
 
   // for ensimeConfigProject
-  val ensimeProjectScalacOptions = TaskKey[Seq[String]](
+  val ensimeProjectScalacOptions = taskKey[Seq[String]](
     "Arguments for the project definition presentation compiler (not possible to extract)."
   )
 
-  val ensimeUnmanagedSourceArchives = SettingKey[Seq[File]](
+  val ensimeUnmanagedSourceArchives = settingKey[Seq[File]](
     "Source jars (and zips) to complement unmanagedClasspath. May be set for the project and its submodules."
   )
-  val ensimeUnmanagedJavadocArchives = SettingKey[Seq[File]](
+  val ensimeUnmanagedJavadocArchives = settingKey[Seq[File]](
     "Documentation jars (and zips) to complement unmanagedClasspath. May only be set for submodules."
   )
 
-  val ensimeMegaUpdate = TaskKey[Map[ProjectRef, (UpdateReport, UpdateReport)]](
+  val ensimeMegaUpdate = taskKey[Map[ProjectRef, (UpdateReport, UpdateReport)]](
     "Runs the aggregated UpdateReport for `update' and `updateClassifiers' respectively."
   )
   val ensimeConfigTransformer = settingKey[EnsimeConfig => EnsimeConfig](
@@ -81,10 +81,9 @@ object EnsimeKeys {
   )
 
   // exploiting a single namespace to workaround https://github.com/ensime/ensime-sbt/issues/148
-  val scalariformPreferences: SettingKey[IFormattingPreferences] =
-    settingKey[IFormattingPreferences](
-      "Scalariform formatting preferences, e.g. indentation"
-    )
+  val scalariformPreferences = settingKey[IFormattingPreferences](
+    "Scalariform formatting preferences, e.g. indentation"
+  )
 }
 
 object EnsimePlugin extends AutoPlugin {
