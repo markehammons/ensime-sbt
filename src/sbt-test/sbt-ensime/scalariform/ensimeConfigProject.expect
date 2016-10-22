@@ -12,6 +12,7 @@
  :formatting-prefs (:placeScaladocAsterisksBeneathSecondAsterisk t :alignSingleLineCaseStatements.maxArrowIndent 20 :danglingCloseParenthesis "preserve" :multilineScaladocCommentsStartOnFirstLine nil :doubleIndentClassDeclaration t)
  :disable-source-monitoring nil
  :disable-class-monitoring nil
+ :source-mode nil
  :subprojects ((
  :name "scalariform-project"
  :source-roots ("BASE_DIR/project")

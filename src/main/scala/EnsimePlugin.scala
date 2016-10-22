@@ -39,11 +39,15 @@ object EnsimeKeys {
       "Note that `proj/compile` does not produce the jar, change your workflow to use `proj/packageBin`."
   )
 
+  // this cluster of settings will be removed in https://github.com/ensime/ensime-sbt/issues/234
   val ensimeDisableSourceMonitoring = settingKey[Boolean](
     "Workaround temporary performance problems on large projects."
   )
   val ensimeDisableClassMonitoring = settingKey[Boolean](
     "Workaround temporary performance problems on large projects."
+  )
+  val ensimeSourceMode = settingKey[Boolean](
+    "Start up ensime in source mode only. For very small projects, scala or dotty."
   )
 
   // used to start the REPL and assembly jar bundles of ensime-server.
@@ -110,6 +114,7 @@ object EnsimePlugin extends AutoPlugin {
     EnsimeKeys.ensimeAdditionalProjectCompilerArgs := defaultCompilerFlags(Properties.versionNumberString),
     EnsimeKeys.ensimeDisableSourceMonitoring := false,
     EnsimeKeys.ensimeDisableClassMonitoring := false,
+    EnsimeKeys.ensimeSourceMode := false,
     EnsimeKeys.ensimeMegaUpdate <<= Keys.state.flatMap { implicit s =>
 
       def checkCoursier(): Unit = {
@@ -274,13 +279,14 @@ object EnsimePlugin extends AutoPlugin {
     val formatting = EnsimeKeys.scalariformPreferences.gimmeOpt
     val disableSourceMonitoring = (EnsimeKeys.ensimeDisableSourceMonitoring).gimme
     val disableClassMonitoring = (EnsimeKeys.ensimeDisableClassMonitoring).gimme
+    val sourceMode = (EnsimeKeys.ensimeSourceMode).gimme
 
     val config = EnsimeConfig(
       root, cacheDir,
       scalaCompilerJars,
       name, scalaV, compilerArgs,
       modules, javaH, javaFlags, javaCompilerArgs, javaSrc, formatting,
-      disableSourceMonitoring, disableClassMonitoring
+      disableSourceMonitoring, disableClassMonitoring, sourceMode
     )
 
     val transformedConfig = EnsimeKeys.ensimeConfigTransformer.gimme.apply(config)
@@ -498,7 +504,7 @@ object EnsimePlugin extends AutoPlugin {
       scalaCompilerJars,
       name, scalaV, compilerArgs,
       Map(module.name -> module), JdkDir, javaFlags, javaCompilerArgs, javaSrc, formatting,
-      false, false
+      false, false, false
     )
 
     val transformedConfig = EnsimeKeys.ensimeConfigTransformerProject.gimme.apply(config)
@@ -555,7 +561,8 @@ case class EnsimeConfig(
   javaSrc: List[File],
   formatting: Option[IFormattingPreferences],
   disableSourceMonitoring: Boolean,
-  disableClassMonitoring: Boolean
+  disableClassMonitoring: Boolean,
+  sourceMode: Boolean
 )
 
 case class EnsimeModule(
@@ -672,6 +679,7 @@ object SExpFormatter {
  :formatting-prefs ${toSExp(c.formatting)}
  :disable-source-monitoring ${toSExp(c.disableSourceMonitoring)}
  :disable-class-monitoring ${toSExp(c.disableClassMonitoring)}
+ :source-mode ${toSExp(c.sourceMode)}
  :subprojects ${msToSExp(c.modules.values)}
 )"""
 

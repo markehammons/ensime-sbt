@@ -12,6 +12,7 @@
  :formatting-prefs nil
  :disable-source-monitoring nil
  :disable-class-monitoring nil
+ :source-mode nil
  :subprojects ((
  :name "simple-build-sbt"
  :source-roots nil

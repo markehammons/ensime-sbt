@@ -12,6 +12,7 @@
  :formatting-prefs (:spacesAroundMultiImports t :doubleIndentClassDeclaration t)
  :disable-source-monitoring nil
  :disable-class-monitoring nil
+ :source-mode nil
  :subprojects ((
  :name "ensime-server-project"
  :source-roots ("BASE_DIR/project")

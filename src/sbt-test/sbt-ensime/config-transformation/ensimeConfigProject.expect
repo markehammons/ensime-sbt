@@ -12,6 +12,7 @@
  :formatting-prefs nil
  :disable-source-monitoring nil
  :disable-class-monitoring nil
+ :source-mode nil
  :subprojects ((
  :name "config-transformation-project"
  :source-roots ("BASE_DIR/project")

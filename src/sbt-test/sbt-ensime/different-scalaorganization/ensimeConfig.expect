@@ -12,6 +12,7 @@
  :formatting-prefs nil
  :disable-source-monitoring nil
  :disable-class-monitoring nil
+ :source-mode t
  :subprojects ((
  :name "different-scalaorganization"
  :source-roots nil
