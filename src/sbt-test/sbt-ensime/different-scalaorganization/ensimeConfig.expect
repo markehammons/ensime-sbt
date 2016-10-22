@@ -1,13 +1,13 @@
 (
  :root-dir "BASE_DIR"
  :cache-dir "BASE_DIR/.ensime_cache"
- :scala-compiler-jars ("IVY_DIR/cache/org.typelevel/scala-compiler/jars/scala-compiler-2.11.7.jar" "IVY_DIR/cache/org.typelevel/scala-library/jars/scala-library-2.11.7.jar" "IVY_DIR/cache/org.typelevel/scala-reflect/jars/scala-reflect-2.11.7.jar" "IVY_DIR/cache/org.typelevel/scalap/jars/scalap-2.11.7.jar")
+ :scala-compiler-jars ("IVY_DIR/cache/org.typelevel/scala-compiler/jars/scala-compiler-2.11.8.jar" "IVY_DIR/cache/org.typelevel/scala-library/jars/scala-library-2.11.8.jar" "IVY_DIR/cache/org.typelevel/scala-reflect/jars/scala-reflect-2.11.8.jar" "IVY_DIR/cache/org.typelevel/scalap/jars/scalap-2.11.8.jar")
  :name "different-scalaorganization"
  :java-home "JDK_HOME"
  :java-flags ("-XX:MaxPermSize=256m" "-Xmx2g" "-Xss2m")
  :java-compiler-args nil
  :reference-source-roots ("JDK_HOME/src.zip")
- :scala-version "2.11.7"
+ :scala-version "2.11.8"
  :compiler-args ("-Xlog-reflective-calls" "-feature" "-deprecation" "-Xlint" "-Yno-adapted-args" "-Ywarn-dead-code" "-Ywarn-numeric-widen" "-Xfuture" "-Ywarn-unused-import" "-Ymacro-expand:discard")
  :formatting-prefs nil
  :disable-source-monitoring nil

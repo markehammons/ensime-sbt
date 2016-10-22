@@ -33,6 +33,9 @@ object EnsimeKeys {
   val ensimeJavaFlags = taskKey[Seq[String]](
     "Flags to be passed to ENSIME JVM process."
   )
+  val ensimeScalaVersion = settingKey[String](
+    "Version of scala for the ENSIME JVM process."
+  )
 
   val ensimeUseTarget = taskKey[Option[File]](
     "Use a calculated jar instead of the class directory. " +
@@ -93,6 +96,7 @@ object EnsimePlugin extends AutoPlugin {
   override def requires = plugins.JvmPlugin
   override def trigger = allRequirements
   val autoImport = EnsimeKeys
+  import autoImport._
 
   val EnsimeInternal = config("ensime-internal").hide
 
@@ -101,17 +105,21 @@ object EnsimePlugin extends AutoPlugin {
     commands += Command.command("ensimeConfigProject", "", "Generate a project/.ensime for the project definition.")(ensimeConfigProject),
 
     // WORKAROUND https://github.com/ensime/ensime-sbt/issues/148
-    EnsimeKeys.scalariformPreferences := EnsimeKeys.scalariformPreferences.?.value.getOrElse {
+    scalariformPreferences := scalariformPreferences.?.value.getOrElse {
       FormattingPreferences()
     },
 
-    EnsimeKeys.ensimeJavaFlags := JavaFlags,
+    // would be nice to infer by majority vote
+    // https://github.com/ensime/ensime-sbt/issues/235
+    ensimeScalaVersion := (scalaVersion in ThisBuild).value,
+
+    ensimeJavaFlags := JavaFlags,
     // unable to infer the user's scalac options: https://github.com/ensime/ensime-sbt/issues/98
-    EnsimeKeys.ensimeProjectScalacOptions := ensimeSuggestedScalacOptions(Properties.versionNumberString),
-    EnsimeKeys.ensimeDisableSourceMonitoring := false,
-    EnsimeKeys.ensimeDisableClassMonitoring := false,
-    EnsimeKeys.ensimeSourceMode := false,
-    EnsimeKeys.ensimeMegaUpdate <<= Keys.state.flatMap { implicit s =>
+    ensimeProjectScalacOptions := ensimeSuggestedScalacOptions(Properties.versionNumberString),
+    ensimeDisableSourceMonitoring := false,
+    ensimeDisableClassMonitoring := false,
+    ensimeSourceMode := false,
+    ensimeMegaUpdate <<= Keys.state.flatMap { implicit s =>
 
       def checkCoursier(): Unit = {
         val structure = Project.extract(s).structure
@@ -140,27 +148,30 @@ object EnsimePlugin extends AutoPlugin {
   )
 
   override lazy val projectSettings = Seq(
-    EnsimeKeys.ensimeUnmanagedSourceArchives := Nil,
-    EnsimeKeys.ensimeUnmanagedJavadocArchives := Nil,
-    EnsimeKeys.ensimeConfigTransformer := identity,
-    EnsimeKeys.ensimeConfigTransformerProject := identity,
-    EnsimeKeys.ensimeUseTarget := None,
+    ensimeUnmanagedSourceArchives := Nil,
+    ensimeUnmanagedJavadocArchives := Nil,
+    ensimeConfigTransformer := identity,
+    ensimeConfigTransformerProject := identity,
+    ensimeUseTarget := None,
 
-    EnsimeKeys.ensimeScalacOptions := ((scalacOptions in Compile).value ++ ensimeSuggestedScalacOptions((scalaVersion).value)).distinct,
-    EnsimeKeys.ensimeJavacOptions := (javacOptions in Compile).value,
+    ensimeScalacOptions := (
+      (scalacOptions in Compile).value ++
+      ensimeSuggestedScalacOptions((ensimeScalaVersion).value)
+    ).distinct,
+    ensimeJavacOptions := (javacOptions in Compile).value,
 
     ivyConfigurations += EnsimeInternal,
     // must be here where the ivy config is defined
-    EnsimeKeys.ensimeScalaCompilerJarModuleIDs := {
+    ensimeScalaCompilerJarModuleIDs := {
       if (organization.value == scalaOrganization.value) Nil
       else Seq(
-        scalaOrganization.value % "scala-compiler" % scalaVersion.value,
-        scalaOrganization.value % "scala-library" % scalaVersion.value,
-        scalaOrganization.value % "scala-reflect" % scalaVersion.value,
-        scalaOrganization.value % "scalap" % scalaVersion.value
+        scalaOrganization.value % "scala-compiler" % ensimeScalaVersion.value,
+        scalaOrganization.value % "scala-library" % ensimeScalaVersion.value,
+        scalaOrganization.value % "scala-reflect" % ensimeScalaVersion.value,
+        scalaOrganization.value % "scalap" % ensimeScalaVersion.value
       ).map(_ % EnsimeInternal.name intransitive ())
     },
-    libraryDependencies ++= EnsimeKeys.ensimeScalaCompilerJarModuleIDs.value
+    libraryDependencies ++= ensimeScalaCompilerJarModuleIDs.value
   )
 
   // exposed for users to use
@@ -185,9 +196,6 @@ object EnsimePlugin extends AutoPlugin {
     implicit val st = state
     implicit val pr = extracted.currentRef
     implicit val bs = extracted.structure
-
-    // no way to detect this value later on unless we capture it
-    val scalaV = (scalaVersion).gimme
 
     var transitiveCache = Map.empty[ProjectRef, Set[ProjectRef]]
     def transitiveProjects(ref: ProjectRef): Set[ProjectRef] = {
@@ -216,7 +224,7 @@ object EnsimePlugin extends AutoPlugin {
       Project.getProjectForReference(ref, bs).map((ref, _))
     }.toMap
 
-    val updateReports = EnsimeKeys.ensimeMegaUpdate.run
+    val updateReports = ensimeMegaUpdate.run
 
     val scalaCompilerJars = updateReports.head._2._1.select(
       configuration = configurationFilter(EnsimeInternal.name),
@@ -226,7 +234,7 @@ object EnsimePlugin extends AutoPlugin {
     implicit val rawModules = projects.collect {
       case (ref, proj) =>
         val (updateReport, updateClassifiersReport) = updateReports(ref)
-        val module = projectData(scalaV, proj, updateReport, updateClassifiersReport)(ref, bs, state)
+        val module = projectData(proj, updateReport, updateClassifiersReport)(ref, bs, state)
         (module.name, module)
     }.toMap
 
@@ -245,12 +253,12 @@ object EnsimePlugin extends AutoPlugin {
     val root = file(Properties.userDir)
     val out = file(".ensime")
     val cacheDir = file(".ensime_cache")
-    val name = (EnsimeKeys.ensimeName).gimmeOpt.getOrElse {
+    val name = (ensimeName).gimmeOpt.getOrElse {
       if (modules.size == 1) modules.head._2.name
       else root.getAbsoluteFile.getName
     }
-    val compilerArgs = (EnsimeKeys.ensimeScalacOptions).run.toList
-    val javaCompilerArgs = (EnsimeKeys.ensimeJavacOptions).run.toList
+    val compilerArgs = (ensimeScalacOptions).run.toList
+    val javaCompilerArgs = (ensimeJavacOptions).run.toList
     val javaH = (javaHome).gimme.getOrElse(JdkDir)
     val javaSrc = {
       file(javaH.getAbsolutePath + "/src.zip") match {
@@ -259,24 +267,25 @@ object EnsimePlugin extends AutoPlugin {
           log.warn(s"No Java sources detected in $javaH (your ENSIME experience will not be as good as it could be.)")
           Nil
       }
-    } ++ EnsimeKeys.ensimeUnmanagedSourceArchives.gimme
+    } ++ ensimeUnmanagedSourceArchives.gimme
 
-    val javaFlags = EnsimeKeys.ensimeJavaFlags.run.toList
+    val javaFlags = ensimeJavaFlags.run.toList
 
-    val formatting = EnsimeKeys.scalariformPreferences.gimmeOpt
-    val disableSourceMonitoring = (EnsimeKeys.ensimeDisableSourceMonitoring).gimme
-    val disableClassMonitoring = (EnsimeKeys.ensimeDisableClassMonitoring).gimme
-    val sourceMode = (EnsimeKeys.ensimeSourceMode).gimme
+    val formatting = scalariformPreferences.gimmeOpt
+    val disableSourceMonitoring = (ensimeDisableSourceMonitoring).gimme
+    val disableClassMonitoring = (ensimeDisableClassMonitoring).gimme
+    val sourceMode = (ensimeSourceMode).gimme
+    val scalaVersion = (ensimeScalaVersion).gimme
 
     val config = EnsimeConfig(
       root, cacheDir,
       scalaCompilerJars,
-      name, scalaV, compilerArgs,
+      name, scalaVersion, compilerArgs,
       modules, javaH, javaFlags, javaCompilerArgs, javaSrc, formatting,
       disableSourceMonitoring, disableClassMonitoring, sourceMode
     )
 
-    val transformedConfig = EnsimeKeys.ensimeConfigTransformer.gimme.apply(config)
+    val transformedConfig = ensimeConfigTransformer.gimme.apply(config)
 
     // workaround for Windows
     write(out, toSExp(transformedConfig).replaceAll("\r\n", "\n") + "\n")
@@ -307,7 +316,6 @@ object EnsimePlugin extends AutoPlugin {
   }
 
   def projectData(
-    scalaV: String,
     project: ResolvedProject,
     updateReport: UpdateReport,
     updateClassifiersReport: UpdateReport
@@ -336,7 +344,7 @@ object EnsimePlugin extends AutoPlugin {
     }
 
     def targetForOpt(config: Configuration): Option[File] =
-      (EnsimeKeys.ensimeUseTarget in config).runOpt match {
+      (ensimeUseTarget in config).runOpt match {
         case Some(Some(jar)) => Some(jar)
         case _               => (classDirectory in config).gimmeOpt
       }
@@ -361,12 +369,12 @@ object EnsimePlugin extends AutoPlugin {
     def jarSrcsFor(config: Configuration) = updateClassifiersReport.select(
       configuration = configFilter(config),
       artifact = artifactFilter(classifier = Artifact.SourceClassifier)
-    ).toSet ++ (EnsimeKeys.ensimeUnmanagedSourceArchives in projectRef).gimme
+    ).toSet ++ (ensimeUnmanagedSourceArchives in projectRef).gimme
 
     def jarDocsFor(config: Configuration) = updateClassifiersReport.select(
       configuration = configFilter(config),
       artifact = artifactFilter(classifier = Artifact.DocClassifier)
-    ).toSet ++ (EnsimeKeys.ensimeUnmanagedJavadocArchives in projectRef).gimme
+    ).toSet ++ (ensimeUnmanagedJavadocArchives in projectRef).gimme
 
     val sbv = scalaBinaryVersion.gimme
     val mainSources = filteredSources(sourcesFor(Compile) ++ sourcesFor(Provided) ++ sourcesFor(Optional), sbv)
@@ -384,16 +392,20 @@ object EnsimePlugin extends AutoPlugin {
     val jarSrcs = testPhases.flatMap(jarSrcsFor) ++ jarSrcsFor(Provided)
     val jarDocs = testPhases.flatMap(jarDocsFor) ++ jarDocsFor(Provided) ++ myDoc
 
-    if (scalaV != scalaVersion.gimme) {
+    val ensimeScalaV = (ensimeScalaVersion in ThisBuild).gimme
+    if (scalaVersion.gimme != ensimeScalaV) {
       if (System.getProperty("ensime.sbt.debug") != null) {
         // for testing
         IO.touch(file("scalaVersionAtStartupWarning"))
       }
 
       log.error(
-        s"""You have a different version of scala for your build (${scalaV}) and ${project.id} (${scalaVersion.gimme}).
-           |It is highly likely that this is a mistake with your configuration.
-           |Please read https://github.com/ensime/ensime-sbt/issues/138""".stripMargin
+        s"""You have a different version of scala for ENSIME ($ensimeScalaV) and ${project.id} (${scalaVersion.gimme}).
+           |If this is not what you intended, use either
+           |  scalaVersion in ThisBuild := "${scalaVersion.gimme}"
+           |in your build.sbt or add
+           |  ensimeScalaVersion in ThisBuild := "${scalaVersion.gimme}"
+           |to a local ensime.sbt""".stripMargin
       )
     }
 
@@ -454,19 +466,19 @@ object EnsimePlugin extends AutoPlugin {
     val root = file(Properties.userDir) / "project"
     val out = root / ".ensime"
     val cacheDir = root / ".ensime_cache"
-    val name = EnsimeKeys.ensimeName.gimmeOpt.getOrElse {
+    val name = ensimeName.gimmeOpt.getOrElse {
       file(Properties.userDir).getName
     } + "-project"
 
-    val compilerArgs = EnsimeKeys.ensimeProjectScalacOptions.run.toList
+    val compilerArgs = ensimeProjectScalacOptions.run.toList
     val scalaV = Properties.versionNumberString
     val javaSrc = JdkDir / "src.zip" match {
       case f if f.exists => List(f)
       case _             => Nil
     }
-    val javaFlags = EnsimeKeys.ensimeJavaFlags.run.toList
+    val javaFlags = ensimeJavaFlags.run.toList
 
-    val formatting = EnsimeKeys.scalariformPreferences.gimmeOpt
+    val formatting = scalariformPreferences.gimmeOpt
 
     val module = EnsimeModule(
       name, Set(root), Set.empty, targets.toSet, Set.empty, Set.empty,
@@ -489,7 +501,7 @@ object EnsimePlugin extends AutoPlugin {
       false, false, false
     )
 
-    val transformedConfig = EnsimeKeys.ensimeConfigTransformerProject.gimme.apply(config)
+    val transformedConfig = ensimeConfigTransformerProject.gimme.apply(config)
 
     write(out, toSExp(transformedConfig).replaceAll("\r\n", "\n") + "\n")
 
