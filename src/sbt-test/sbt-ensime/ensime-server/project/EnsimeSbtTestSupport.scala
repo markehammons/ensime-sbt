@@ -67,6 +67,7 @@ object EnsimeSbtTestSupport extends AutoPlugin {
             replaceAll(raw"""/[.\d]++(-SNAPSHOT)?/srcs/sbt-ensime-sources.jar"""", """/HEAD/srcs/sbt-ensime-sources.jar"""").
             replaceAll(raw""""-Dsbt[.]global[.]base=BASE_DIR/global"""", "").
             replaceAll(raw"\s++", " ").
+            replace("0.13.11", "0.13.12"). // upgraded sbt
             replace("( ", "(").replace(" )", ")")
       }
     }.toList

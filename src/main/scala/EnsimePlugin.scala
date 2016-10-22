@@ -160,6 +160,9 @@ object EnsimePlugin extends AutoPlugin {
     ).distinct,
     ensimeJavacOptions := (javacOptions in Compile).value,
 
+    // WORKAROUND https://github.com/ensime/ensime-sbt/issues/239
+    ivyScala ~= (_ map (_ copy (overrideScalaVersion = false))),
+
     ivyConfigurations += EnsimeInternal,
     // must be here where the ivy config is defined
     ensimeScalaCompilerJarModuleIDs := {
