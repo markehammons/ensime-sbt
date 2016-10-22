@@ -5,6 +5,10 @@ package org.ensime
 import sbt._
 import Keys._
 import complete.{DefaultParsers, Parser}
+import scalariform.formatter.ScalaFormatter
+import scalariform.parser.ScalaParserException
+
+import EnsimeKeys._
 
 object EnsimeExtrasKeys {
 
@@ -40,7 +44,10 @@ object EnsimeExtrasKeys {
     "ensimeLaunch",
     "Launch a named application in ensimeLaunchConfigurations"
   )
-
+  val ensimeScalariformOnly = InputKey[Unit](
+    "ensimeScalariformOnly",
+    "Formats a single scala file"
+  )
 }
 
 object EnsimeExtrasPlugin extends AutoPlugin {
@@ -65,11 +72,13 @@ object EnsimeExtrasPlugin extends AutoPlugin {
     ),
     ensimeLaunchConfigurations := Nil,
     ensimeLaunch <<= launchTask,
+    aggregate in ensimeScalariformOnly := false,
     aggregate in ensimeCompileOnly := false
   ) ++ Seq(Compile, Test).flatMap { config =>
       // WORKAROUND https://github.com/sbt/sbt/issues/2580
       inConfig(config) {
         Seq(
+          ensimeScalariformOnly <<= scalariformOnlyTask,
           ensimeCompileOnly <<= compileOnlyTask,
           scalacOptions in ensimeCompileOnly := scalacOptions.value
         )
@@ -138,6 +147,7 @@ object EnsimeExtrasPlugin extends AutoPlugin {
     def modifiedBinaries = Array()
     def modifiedClasses = Array()
   }
+
   private object noopCallback extends xsbti.AnalysisCallback {
     val includeSynthToNameHashing: Boolean = true
     override val nameHashing: Boolean = true
@@ -170,18 +180,7 @@ object EnsimeExtrasPlugin extends AutoPlugin {
       ).map { (args, dirs, cp, out, opts, merrs, in, cs, s) =>
           if (args.isEmpty) throw new IllegalArgumentException("needs a file")
           args.foreach { arg =>
-            val input: File = file(arg).getCanonicalFile
-            val sourceDirs = dirs.map(_.getCanonicalFile)
-
-            val here = sourceDirs.exists { dir => input.getPath.startsWith(dir.getPath) }
-            if (!here || !input.exists())
-              throw new IllegalArgumentException(s"$arg not associated to $sourceDirs")
-
-            // there is no reason why we couldn't compileOnly other
-            // languages, but they would require explicit support.
-            // Java shouldn't be too hard if somebody wants it.
-            if (!input.getName.endsWith(".scala"))
-              throw new IllegalArgumentException(s"only .scala files are supported: $arg")
+            val input: File = fileInProject(arg, dirs.map(_.getCanonicalFile))
 
             if (!out.exists()) IO.createDirectory(out)
             s.log.info(s"""Compiling $input with ${opts.mkString(" ")}""")
@@ -219,6 +218,44 @@ object EnsimeExtrasPlugin extends AutoPlugin {
       (javaOptions in proj) := rewritten
     }
     extracted.append(newSettings, state)
+  }
+
+  def scalariformOnlyTask: Def.Initialize[InputTask[Unit]] = InputTask(
+    (s: State) => Def.spaceDelimited()
+  ) { (argTask: TaskKey[Seq[String]]) =>
+      (argTask, sourceDirectories, scalariformPreferences, scalaVersion, baseDirectory, streams).map {
+        (files, dirs, preferences, version, base, s) =>
+          if (files.isEmpty) throw new IllegalArgumentException("needs a file")
+          files.foreach(arg => {
+            val input: File = fileInProject(arg, (dirs.map(_.getCanonicalFile)) :+ new File(base.getPath + "/project"))
+
+            try {
+              val contents = IO.read(input)
+              val formatted = ScalaFormatter.format(
+                contents,
+                preferences,
+                scalaVersion = version split "-" head
+              )
+              if (formatted != contents) IO.write(input, formatted)
+              s.log.info(s"Formatted $input")
+            } catch {
+              case e: ScalaParserException =>
+                s.log.warn(s"Scalariform parser error for $input: $e.getMessage")
+            }
+          })
+      }
+    }
+
+  private def fileInProject(arg: String, sourceDirs: Seq[File]): File = {
+    val input = file(arg).getCanonicalFile
+    val here = sourceDirs.exists { dir => input.getPath.startsWith(dir.getPath) }
+    if (!here || !input.exists())
+      throw new IllegalArgumentException(s"$arg not associated to $sourceDirs")
+
+    if (!input.getName.endsWith(".scala"))
+      throw new IllegalArgumentException(s"only .scala files are supported: $arg")
+
+    input
   }
 
 }
