@@ -12,6 +12,7 @@
  :formatting-prefs (:spacesAroundMultiImports t :doubleIndentClassDeclaration t)
  :disable-source-monitoring nil
  :disable-class-monitoring nil
+ :source-mode nil
  :subprojects ((
  :name "api"
  :source-roots ("BASE_DIR/api/src/main/scala" "BASE_DIR/api/src/test/scala")

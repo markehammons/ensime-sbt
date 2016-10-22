@@ -14,7 +14,7 @@ object EnsimeSbtBuild extends Build {
 
   override val settings = super.settings ++ Seq(
     organization := "org.ensime",
-    version := "1.10.1-SNAPSHOT"
+    version := "1.11.0-SNAPSHOT"
   ) ++ sonatype("ensime", "ensime-sbt", Apache2)
 
   lazy val root = Project("sbt-ensime", file(".")).
@@ -24,7 +24,7 @@ object EnsimeSbtBuild extends Build {
       sbtPlugin := true,
       // intentionally old version of scalariform: do not force an upgrade upon users
       libraryDependencies += "org.scalariform" %% "scalariform" % "0.1.4",
-      // scalap needed for :scala-compiler-jars
+      // scalap needed for :scala-compiler-jars in project/.ensime
       libraryDependencies += "org.scala-lang" % "scalap" % scalaVersion.value,
       ScalariformKeys.preferences := FormattingPreferences().setPreference(AlignSingleLineCaseStatements, true),
       scriptedLaunchOpts := Seq(

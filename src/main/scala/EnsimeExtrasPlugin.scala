@@ -15,37 +15,31 @@ object EnsimeExtrasKeys {
   case class JavaArgs(mainClass: String, envArgs: Map[String, String], jvmArgs: Seq[String], classArgs: Seq[String])
   case class LaunchConfig(name: String, javaArgs: JavaArgs)
 
-  val ensimeDebuggingFlag = SettingKey[String](
+  val ensimeDebuggingFlag = settingKey[String](
     "JVM flag to enable remote debugging of forked tasks."
   )
-  val ensimeDebuggingPort = SettingKey[Int](
+  val ensimeDebuggingPort = settingKey[Int](
     "Port for remote debugging of forked tasks."
   )
 
-  val ensimeCompileOnly = InputKey[Unit](
-    "ensimeCompileOnly",
+  val ensimeCompileOnly = inputKey[Unit](
     "Compiles a single scala file"
   )
 
-  val ensimeRunMain = InputKey[Unit](
-    "ensimeRunMain",
+  val ensimeRunMain = inputKey[Unit](
     "Run user specified env/args/class/params (e.g. `ensimeRunMain FOO=BAR -Xmx2g foo.Bar baz')"
   )
-  val ensimeRunDebug = InputKey[Unit](
-    "ensimeRunDebug",
+  val ensimeRunDebug = inputKey[Unit](
     "Run user specified env/args/class/params with debugging flags added"
   )
 
-  val ensimeLaunchConfigurations = SettingKey[Seq[LaunchConfig]](
-    "ensimeLaunchConfigurations",
+  val ensimeLaunchConfigurations = settingKey[Seq[LaunchConfig]](
     "Named applications with canned env/args/class/params"
   )
-  val ensimeLaunch = InputKey[Unit](
-    "ensimeLaunch",
+  val ensimeLaunch = inputKey[Unit](
     "Launch a named application in ensimeLaunchConfigurations"
   )
-  val ensimeScalariformOnly = InputKey[Unit](
-    "ensimeScalariformOnly",
+  val ensimeScalariformOnly = inputKey[Unit](
     "Formats a single scala file"
   )
 }

@@ -1,6 +1,12 @@
 ivyLoggingLevel := UpdateLogging.Quiet
 
-// unless "in ThisBuild" is appended, the correct base scalac flags are not detected
-scalaVersion := "2.11.7"
+scalaVersion in ThisBuild := "2.11.7"
 scalaOrganization := "org.typelevel"
 scalacOptions in Compile := Seq("-Xlog-reflective-calls")
+
+// piggybacking this little feature onto this test
+ensimeSourceMode := true
+
+// and not only a custom scalaOrganization, but a different version of
+// scala for ensime (uses the same org as the build)
+ensimeScalaVersion := "2.11.8"
