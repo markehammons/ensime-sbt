@@ -33,6 +33,9 @@ object EnsimeKeys {
   val ensimeJavaFlags = taskKey[Seq[String]](
     "Flags to be passed to ENSIME JVM process."
   )
+  val ensimeJavaHome = settingKey[File](
+    "The java home directory to be used by the ENSIME JVM process."
+  )
   val ensimeScalaVersion = settingKey[String](
     "Version of scala for the ENSIME JVM process."
   )
@@ -103,6 +106,7 @@ object EnsimePlugin extends AutoPlugin {
     ensimeScalaVersion := scalaVersion.value,
 
     ensimeJavaFlags := JavaFlags,
+    ensimeJavaHome := javaHome.value.getOrElse(JdkDir),
     // unable to infer the user's scalac options: https://github.com/ensime/ensime-sbt/issues/98
     ensimeProjectScalacOptions := ensimeSuggestedScalacOptions(Properties.versionNumberString),
     ensimeMegaUpdate <<= Keys.state.flatMap { implicit s =>
@@ -249,7 +253,7 @@ object EnsimePlugin extends AutoPlugin {
     }
     val compilerArgs = (ensimeScalacOptions).run.toList
     val javaCompilerArgs = (ensimeJavacOptions).run.toList
-    val javaH = (javaHome).gimme.getOrElse(JdkDir)
+    val javaH = (ensimeJavaHome).gimme
     val javaSrc = {
       file(javaH.getAbsolutePath + "/src.zip") match {
         case f if f.exists => List(f)
