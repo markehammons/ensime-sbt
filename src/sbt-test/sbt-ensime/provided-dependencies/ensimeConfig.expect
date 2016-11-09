@@ -8,7 +8,7 @@
  :java-compiler-args nil
  :reference-source-roots ("JDK_HOME/src.zip")
  :scala-version "2.11.8"
- :compiler-args ("-Xlog-reflective-calls" "-feature" "-deprecation" "-Xlint" "-Yno-adapted-args" "-Ywarn-dead-code" "-Ywarn-numeric-widen" "-Xfuture" "-Ywarn-unused-import" "-Ymacro-expand:discard")
+ :compiler-args ("-Xlog-reflective-calls" "-feature" "-deprecation" "-Xlint" "-Ywarn-dead-code" "-Ywarn-numeric-widen" "-Xfuture" "-Ywarn-unused-import" "-Ymacro-expand:discard")
  :subprojects ((
  :name "provided-dependencies"
  :source-roots nil
@@ -30,13 +30,13 @@
  (:name "compile"
  :sources nil
  :targets ("BASE_DIR/target/scala-2.11/classes")
- :scalac-options ("-Xlog-reflective-calls" "-feature" "-deprecation" "-Xlint" "-Yno-adapted-args" "-Ywarn-dead-code" "-Ywarn-numeric-widen" "-Xfuture" "-Ywarn-unused-import" "-Ymacro-expand:discard")
+ :scalac-options ("-Xlog-reflective-calls" "-feature" "-deprecation" "-Xlint" "-Ywarn-dead-code" "-Ywarn-numeric-widen" "-Xfuture" "-Ywarn-unused-import" "-Ymacro-expand:discard")
  :javac-options nil
  :library-dependencies ("IVY_DIR/cache/commons-io/commons-io/jars/commons-io-2.5.jar" "IVY_DIR/cache/com.google.guava/guava/bundles/guava-19.0.jar" "IVY_DIR/cache/org.scala-lang/scala-library/jars/scala-library-2.11.8.jar")) 
  (:name "test"
  :sources nil
  :targets ("BASE_DIR/target/scala-2.11/test-classes")
- :scalac-options ("-Xlog-reflective-calls" "-feature" "-deprecation" "-Xlint" "-Yno-adapted-args" "-Ywarn-dead-code" "-Ywarn-numeric-widen" "-Xfuture" "-Ywarn-unused-import" "-Ymacro-expand:discard")
+ :scalac-options ("-Xlog-reflective-calls" "-feature" "-deprecation" "-Xlint" "-Ywarn-dead-code" "-Ywarn-numeric-widen" "-Xfuture" "-Ywarn-unused-import" "-Ymacro-expand:discard")
  :javac-options nil
  :library-dependencies ("IVY_DIR/cache/commons-io/commons-io/jars/commons-io-2.5.jar" "IVY_DIR/cache/org.scala-lang/scala-library/jars/scala-library-2.11.8.jar")))))
 )

@@ -172,10 +172,8 @@ object EnsimePlugin extends AutoPlugin {
     "-feature",
     "-deprecation",
     "-Xlint",
-    "-Yno-adapted-args",
     "-Ywarn-dead-code",
     "-Ywarn-numeric-widen",
-    //"-Ywarn-value-discard", // more annoying than useful
     "-Xfuture"
   ) ++ {
       CrossVersion.partialVersion(scalaVersion) match {
