@@ -261,7 +261,7 @@ object EnsimePlugin extends AutoPlugin {
           log.warn(s"No Java sources detected in $javaH (your ENSIME experience will not be as good as it could be.)")
           Nil
       }
-    } ++ ensimeUnmanagedSourceArchives.gimme
+    } ++ (ensimeUnmanagedSourceArchives in ThisBuild).gimme
 
     val javaFlags = ensimeJavaFlags.run.toList
 
@@ -362,12 +362,12 @@ object EnsimePlugin extends AutoPlugin {
     def jarSrcsFor(config: Configuration) = updateClassifiersReport.select(
       configuration = configFilter(config),
       artifact = artifactFilter(classifier = Artifact.SourceClassifier)
-    ).toSet ++ (ensimeUnmanagedSourceArchives in projectRef).gimme
+    ).toSet ++ (ensimeUnmanagedSourceArchives in config in projectRef).gimme
 
     def jarDocsFor(config: Configuration) = updateClassifiersReport.select(
       configuration = configFilter(config),
       artifact = artifactFilter(classifier = Artifact.DocClassifier)
-    ).toSet ++ (ensimeUnmanagedJavadocArchives in projectRef).gimme
+    ).toSet ++ (ensimeUnmanagedJavadocArchives in config in projectRef).gimme
 
     def configDataFor(config: Configuration): EnsimeConfiguration = {
       val sbv = scalaBinaryVersion.gimme
@@ -430,8 +430,8 @@ object EnsimePlugin extends AutoPlugin {
 
     val deps = project.dependencies.map(_.project.project).toSet
     val runtimeJars = jarsFor(Runtime) ++ unmanagedJarsFor(Runtime) -- compileConfig.jars
-    val jarSrcs = testPhases.flatMap(jarSrcsFor) ++ jarSrcsFor(Provided)
-    val jarDocs = testPhases.flatMap(jarDocsFor) ++ jarDocsFor(Provided) ++ myDoc
+    val jarSrcs = (testPhases + Provided + Compile).flatMap(jarSrcsFor)
+    val jarDocs = (testPhases + Provided + Compile).flatMap(jarDocsFor) ++ myDoc
 
     EnsimeProject(project.id, deps, runtimeJars, jarSrcs, jarDocs, configs)
 
