@@ -59,8 +59,9 @@ object EnsimeExtrasPlugin extends AutoPlugin {
   override lazy val projectSettings = Seq(
     ensimeDebuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
     ensimeDebuggingPort := 5005,
-    ensimeRunMain <<= parseAndRunMainWithSettings(),
-    ensimeRunDebug <<= parseAndRunMainWithSettings(
+    ensimeRunMain in Compile <<= parseAndRunMainWithSettings(Compile),
+    ensimeRunDebug in Compile <<= parseAndRunMainWithSettings(
+      Compile,
       // it would be good if this could reference Settings...
       extraArgs = Seq(s"-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005")
     ),
@@ -98,19 +99,27 @@ object EnsimeExtrasPlugin extends AutoPlugin {
   }
 
   def parseAndRunMainWithSettings(
+    config: Configuration,
     extraEnv: Map[String, String] = Map.empty,
     extraArgs: Seq[String] = Seq.empty
   ): Def.Initialize[InputTask[Unit]] = {
     val parser = (s: State) => ensimeRunMainTaskParser
     Def.inputTask {
-      val givenArgs = parser.parsed
-      val newJvmArgs = (javaOptions.value ++ extraArgs ++ givenArgs.jvmArgs).distinct
-      val newEnvArgs = envVars.value ++ extraEnv ++ givenArgs.envArgs
-      toError(new ForkRun(ForkOptions(runJVMOptions = newJvmArgs, envVars = newEnvArgs)).run(
-        givenArgs.mainClass,
-        Attributed.data((fullClasspath in Compile).value),
-        givenArgs.classArgs,
-        streams.value.log
+      val log = (streams in config).value.log
+      val args = parser.parsed
+      val newJvmArgs = ((javaOptions in config).value ++ extraArgs ++ args.jvmArgs).distinct
+      val newEnvArgs = (envVars in config).value ++ extraEnv ++ args.envArgs
+      val options = ForkOptions(
+        runJVMOptions = newJvmArgs,
+        envVars = newEnvArgs,
+        workingDirectory = Some((baseDirectory in config).value)
+      )
+      log.debug(s"launching $options ${args.mainClass} $newJvmArgs ${args.classArgs}")
+      toError(new ForkRun(options).run(
+        args.mainClass,
+        Attributed.data((fullClasspath in config).value),
+        args.classArgs,
+        log
       ))
     }
   }
