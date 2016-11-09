@@ -67,12 +67,12 @@ object EnsimeExtrasPlugin extends AutoPlugin {
     ensimeLaunchConfigurations := Nil,
     ensimeLaunch in Compile <<= launchTask(Compile),
     aggregate in ensimeScalariformOnly := false,
+    ensimeScalariformOnly <<= scalariformOnlyTask,
     aggregate in ensimeCompileOnly := false
   ) ++ Seq(Compile, Test).flatMap { config =>
       // WORKAROUND https://github.com/sbt/sbt/issues/2580
       inConfig(config) {
         Seq(
-          ensimeScalariformOnly <<= scalariformOnlyTask,
           ensimeCompileOnly <<= compileOnlyTask,
           scalacOptions in ensimeCompileOnly := scalacOptions.value
         )
@@ -219,11 +219,10 @@ object EnsimeExtrasPlugin extends AutoPlugin {
   def scalariformOnlyTask: Def.Initialize[InputTask[Unit]] = InputTask(
     (s: State) => Def.spaceDelimited()
   ) { (argTask: TaskKey[Seq[String]]) =>
-      (argTask, sourceDirectories, scalariformPreferences, scalaVersion, baseDirectory, streams).map {
-        (files, dirs, preferences, version, base, s) =>
-          if (files.isEmpty) throw new IllegalArgumentException("needs a file")
-          files.foreach(arg => {
-            val input: File = fileInProject(arg, (dirs.map(_.getCanonicalFile)) :+ new File(base.getPath + "/project"))
+      (argTask, scalariformPreferences, scalaVersion, streams).map {
+        (files, preferences, version, s) =>
+          files.foreach { arg =>
+            val input: File = file(arg) // don't demand it to be in a source dir
 
             try {
               val contents = IO.read(input)
@@ -238,7 +237,7 @@ object EnsimeExtrasPlugin extends AutoPlugin {
               case e: ScalaParserException =>
                 s.log.warn(s"Scalariform parser error for $input: $e.getMessage")
             }
-          })
+          }
       }
     }
 
