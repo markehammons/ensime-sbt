@@ -28,10 +28,7 @@ object Sensible {
       "-language:implicitConversions",
       "-Xlint",
       "-Yinline-warnings",
-      "-Yno-adapted-args",
       "-Ywarn-dead-code",
-      //"-Ywarn-numeric-widen", // noisy
-      //"-Ywarn-value-discard", // will require a lot of work
       "-Xfuture"
     ) ++ {
         if (scalaVersion.value.startsWith("2.11")) Seq("-Ywarn-unused-import")

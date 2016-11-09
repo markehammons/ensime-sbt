@@ -59,20 +59,21 @@ object EnsimeExtrasPlugin extends AutoPlugin {
   override lazy val projectSettings = Seq(
     ensimeDebuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
     ensimeDebuggingPort := 5005,
-    ensimeRunMain <<= parseAndRunMainWithSettings(),
-    ensimeRunDebug <<= parseAndRunMainWithSettings(
+    ensimeRunMain in Compile <<= parseAndRunMainWithSettings(Compile),
+    ensimeRunDebug in Compile <<= parseAndRunMainWithSettings(
+      Compile,
       // it would be good if this could reference Settings...
       extraArgs = Seq(s"-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005")
     ),
     ensimeLaunchConfigurations := Nil,
     ensimeLaunch in Compile <<= launchTask(Compile),
     aggregate in ensimeScalariformOnly := false,
+    ensimeScalariformOnly <<= scalariformOnlyTask,
     aggregate in ensimeCompileOnly := false
   ) ++ Seq(Compile, Test).flatMap { config =>
       // WORKAROUND https://github.com/sbt/sbt/issues/2580
       inConfig(config) {
         Seq(
-          ensimeScalariformOnly <<= scalariformOnlyTask,
           ensimeCompileOnly <<= compileOnlyTask,
           scalacOptions in ensimeCompileOnly := scalacOptions.value
         )
@@ -98,19 +99,27 @@ object EnsimeExtrasPlugin extends AutoPlugin {
   }
 
   def parseAndRunMainWithSettings(
+    config: Configuration,
     extraEnv: Map[String, String] = Map.empty,
     extraArgs: Seq[String] = Seq.empty
   ): Def.Initialize[InputTask[Unit]] = {
     val parser = (s: State) => ensimeRunMainTaskParser
     Def.inputTask {
-      val givenArgs = parser.parsed
-      val newJvmArgs = (javaOptions.value ++ extraArgs ++ givenArgs.jvmArgs).distinct
-      val newEnvArgs = envVars.value ++ extraEnv ++ givenArgs.envArgs
-      toError(new ForkRun(ForkOptions(runJVMOptions = newJvmArgs, envVars = newEnvArgs)).run(
-        givenArgs.mainClass,
-        Attributed.data((fullClasspath in Compile).value),
-        givenArgs.classArgs,
-        streams.value.log
+      val log = (streams in config).value.log
+      val args = parser.parsed
+      val newJvmArgs = ((javaOptions in config).value ++ extraArgs ++ args.jvmArgs).distinct
+      val newEnvArgs = (envVars in config).value ++ extraEnv ++ args.envArgs
+      val options = ForkOptions(
+        runJVMOptions = newJvmArgs,
+        envVars = newEnvArgs,
+        workingDirectory = Some((baseDirectory in config).value)
+      )
+      log.debug(s"launching $options ${args.mainClass} $newJvmArgs ${args.classArgs}")
+      toError(new ForkRun(options).run(
+        args.mainClass,
+        Attributed.data((fullClasspath in config).value),
+        args.classArgs,
+        log
       ))
     }
   }
@@ -219,11 +228,10 @@ object EnsimeExtrasPlugin extends AutoPlugin {
   def scalariformOnlyTask: Def.Initialize[InputTask[Unit]] = InputTask(
     (s: State) => Def.spaceDelimited()
   ) { (argTask: TaskKey[Seq[String]]) =>
-      (argTask, sourceDirectories, scalariformPreferences, scalaVersion, baseDirectory, streams).map {
-        (files, dirs, preferences, version, base, s) =>
-          if (files.isEmpty) throw new IllegalArgumentException("needs a file")
-          files.foreach(arg => {
-            val input: File = fileInProject(arg, (dirs.map(_.getCanonicalFile)) :+ new File(base.getPath + "/project"))
+      (argTask, scalariformPreferences, scalaVersion, streams).map {
+        (files, preferences, version, s) =>
+          files.foreach { arg =>
+            val input: File = file(arg) // don't demand it to be in a source dir
 
             try {
               val contents = IO.read(input)
@@ -238,7 +246,7 @@ object EnsimeExtrasPlugin extends AutoPlugin {
               case e: ScalaParserException =>
                 s.log.warn(s"Scalariform parser error for $input: $e.getMessage")
             }
-          })
+          }
       }
     }
 
