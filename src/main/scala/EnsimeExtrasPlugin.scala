@@ -133,7 +133,8 @@ object EnsimeExtrasPlugin extends AutoPlugin {
         val args = launcher.javaArgs
         val options = ForkOptions(
           runJVMOptions = (javaOptions in config).value ++ args.jvmArgs ++ extraArgs,
-          envVars = (envVars in config).value ++ args.envArgs
+          envVars = (envVars in config).value ++ args.envArgs,
+          workingDirectory = Some((baseDirectory in config).value)
         )
         streams.value.log.info(s"launching $options -cp CLASSPATH ${args.mainClass} ${args.classArgs ++ additionalParams}")
         toError(

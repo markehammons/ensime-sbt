@@ -21,7 +21,6 @@ object Sensible {
 
     scalacOptions in Compile ++= Seq(
       "-encoding", "UTF-8",
-      "-target:jvm-1.7",
       "-feature",
       "-deprecation",
       "-language:postfixOps",
@@ -35,10 +34,9 @@ object Sensible {
         else Nil
       },
     javacOptions in (Compile, compile) ++= Seq(
-      "-source", "1.7", "-target", "1.7", "-Xlint:all", "-Werror",
+      "-Xlint:all", "-Werror",
       "-Xlint:-options", "-Xlint:-path", "-Xlint:-processing"
     ),
-    javacOptions in doc ++= Seq("-source", "1.7"),
 
     javaOptions := Seq("-Xss2m", "-XX:MaxPermSize=256m", "-Xms384m", "-Xmx384m"),
     javaOptions += "-Dfile.encoding=UTF8",
