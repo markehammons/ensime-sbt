@@ -1,1 +1,1 @@
-../../simple-build.sbt/project/plugins.sbt
+../../simple-build-sbt/project/plugins.sbt
