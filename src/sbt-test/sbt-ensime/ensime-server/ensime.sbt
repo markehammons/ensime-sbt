@@ -1,0 +1,1 @@
+ensimeName := "ensime-server"

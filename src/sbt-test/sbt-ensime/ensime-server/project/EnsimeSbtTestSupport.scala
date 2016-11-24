@@ -39,7 +39,7 @@ object EnsimeSbtTestSupport extends AutoPlugin {
     implicit val pr = extracted.currentRef
     implicit val bs = extracted.structure
 
-    val projname = name.gimme
+    val projname = org.ensime.EnsimeKeys.ensimeName.gimmeOpt.getOrElse(name.gimme)
     val pluginDir = sys.props("plugin.src")
     val origDir = file(pluginDir) / s"src/sbt-test/sbt-ensime/$projname"
 
