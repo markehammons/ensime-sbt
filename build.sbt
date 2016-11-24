@@ -6,6 +6,9 @@ sbtPlugin := true
 sonatypeGithub := ("ensime", "ensime-sbt")
 licenses := Seq(Apache2)
 
+// BLOCKED https://github.com/ensime/ensime-sbt/issues/270
+scalacOptions -= "-Xfatal-warnings"
+
 // intentionally old version of scalariform: do not force an upgrade upon users
 libraryDependencies += "org.scalariform" %% "scalariform" % "0.1.4"
 

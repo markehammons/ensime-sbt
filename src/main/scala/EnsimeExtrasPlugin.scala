@@ -59,22 +59,22 @@ object EnsimeExtrasPlugin extends AutoPlugin {
   override lazy val projectSettings = Seq(
     ensimeDebuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
     ensimeDebuggingPort := 5005,
-    ensimeRunMain in Compile <<= parseAndRunMainWithSettings(Compile),
-    ensimeRunDebug in Compile <<= parseAndRunMainWithSettings(
+    ensimeRunMain in Compile := parseAndRunMainWithSettings(Compile).evaluated,
+    ensimeRunDebug in Compile := parseAndRunMainWithSettings(
       Compile,
-      // it would be good if this could reference Settings...
+      // use ensimeDebugging{Flag,Port} https://github.com/ensime/ensime-sbt/issues/228
       extraArgs = Seq(s"-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005")
-    ),
+    ).evaluated,
     ensimeLaunchConfigurations := Nil,
-    ensimeLaunch in Compile <<= launchTask(Compile),
+    ensimeLaunch in Compile := launchTask(Compile).evaluated,
     aggregate in ensimeScalariformOnly := false,
-    ensimeScalariformOnly <<= scalariformOnlyTask,
+    ensimeScalariformOnly := scalariformOnlyTask.evaluated,
     aggregate in ensimeCompileOnly := false
   ) ++ Seq(Compile, Test).flatMap { config =>
       // WORKAROUND https://github.com/sbt/sbt/issues/2580
       inConfig(config) {
         Seq(
-          ensimeCompileOnly <<= compileOnlyTask,
+          ensimeCompileOnly := compileOnlyTask.evaluated,
           scalacOptions in ensimeCompileOnly := scalacOptions.value
         )
       }
