@@ -39,6 +39,10 @@ object EnsimeSbtTestSupport extends AutoPlugin {
     implicit val pr = extracted.currentRef
     implicit val bs = extracted.structure
 
+    val projname = org.ensime.EnsimeKeys.ensimeName.gimmeOpt.getOrElse(name.gimme)
+    val pluginDir = sys.props("plugin.src")
+    val origDir = file(pluginDir) / s"src/sbt-test/sbt-ensime/$projname"
+
     val baseDir = baseDirectory.gimme.getCanonicalPath.replace(raw"\", "/")
     val log = state.log
 
@@ -62,21 +66,20 @@ object EnsimeSbtTestSupport extends AutoPlugin {
             replaceAll("""/Library/Java/JavaVirtualMachines/[^/]+/Contents/Home""", "JDK_HOME").
             replaceAll("""C:/Program Files/Java/[^/"]++""", "JDK_HOME").
             replace(jdkHome, "JDK_HOME").
-            replaceAll(raw""""-Dplugin[.]version=[^"]++"""", "").
+            replaceAll(""""-Dplugin[.]src=[^"]++"""", "").
+            replaceAll(""""-Dplugin[.]version=[^"]++"""", "").
             replaceAll(""""-Xfatal-warnings"""", ""). // ensime-server only has these in CI
-            replaceAll(raw"""/[^/]++/jars/sbt-ensime.jar"""", """/HEAD/jars/sbt-ensime.jar"""").
-            replaceAll(raw"""/[^/]++/srcs/sbt-ensime-sources.jar"""", """/HEAD/srcs/sbt-ensime-sources.jar"""").
-            replaceAll(raw""""-Dsbt[.]global[.]base=BASE_DIR/global"""", "").
+            replaceAll("""/[^/]++/jars/sbt-ensime.jar"""", """/HEAD/jars/sbt-ensime.jar"""").
+            replaceAll("""/[^/]++/srcs/sbt-ensime-sources.jar"""", """/HEAD/srcs/sbt-ensime-sources.jar"""").
+            replaceAll(""""-Dsbt[.]global[.]base=BASE_DIR/global"""", "").
             replaceAll(raw"\s++", " ").
-            replace("0.13.11", "0.13.12"). // upgraded sbt
             replace("( ", "(").replace(" )", ")")
       }
     }.toList
 
     val deltas = DiffUtils.diff(expect.asJava, got.asJava).getDeltas.asScala
     if (!deltas.isEmpty) {
-      // for local debugging
-      IO.write(file(Properties.userHome + "/ensime-got"), got.mkString("\n"))
+      IO.write(origDir / args(1), got.mkString("\n"))
       throw new MessageOnlyException(s".ensime diff: ${deltas.mkString("\n")}")
     }
 

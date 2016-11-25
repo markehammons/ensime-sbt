@@ -35,8 +35,22 @@ object EnsimeKeys {
   val ensimeJavaHome = settingKey[File](
     "The java home directory to be used by the ENSIME JVM process."
   )
-  val ensimeScalaVersion = settingKey[String](
+  val ensimeScalaVersion = taskKey[String](
     "Version of scala for the ENSIME JVM process."
+  )
+
+  val ensimeScalaJars = taskKey[Seq[File]](
+    "The scala compiler's jars."
+  )
+  val ensimeScalaProjectJars = taskKey[Seq[File]](
+    "The build's scala compiler's jars."
+  )
+
+  val ensimeServerJars = taskKey[Seq[File]](
+    "The ensime-server's jars."
+  )
+  val ensimeServerProjectJars = taskKey[Seq[File]](
+    "The build's ensime-server's jars."
   )
 
   val ensimeUseTarget = taskKey[Option[File]](
@@ -83,8 +97,6 @@ object EnsimePlugin extends AutoPlugin {
   override def trigger = allRequirements
   val autoImport = EnsimeKeys
   import autoImport._
-
-  val EnsimeInternal = config("ensime-internal").hide
 
   override lazy val buildSettings = Seq(
     commands += Command.args("ensimeConfig", ("", ""), "Generate a .ensime for the project.", "proj1 proj2")(ensimeConfig),
@@ -137,23 +149,7 @@ object EnsimePlugin extends AutoPlugin {
       (scalacOptions in Compile).value ++
       ensimeSuggestedScalacOptions((ensimeScalaVersion in ThisBuild).value)
     ).distinct,
-    ensimeJavacOptions := (javacOptions in Compile).value,
-
-    // WORKAROUND https://github.com/ensime/ensime-sbt/issues/239
-    ivyScala ~= (_ map (_ copy (overrideScalaVersion = false))),
-
-    ivyConfigurations += EnsimeInternal,
-    // must be here where the ivy config is defined
-    ensimeScalaCompilerJarModuleIDs := {
-      if (organization.value == scalaOrganization.value) Nil
-      else Seq(
-        scalaOrganization.value % "scala-compiler" % (ensimeScalaVersion in ThisBuild).value,
-        scalaOrganization.value % "scala-library" % (ensimeScalaVersion in ThisBuild).value,
-        scalaOrganization.value % "scala-reflect" % (ensimeScalaVersion in ThisBuild).value,
-        scalaOrganization.value % "scalap" % (ensimeScalaVersion in ThisBuild).value
-      ).map(_ % EnsimeInternal.name intransitive ())
-    },
-    libraryDependencies ++= ensimeScalaCompilerJarModuleIDs.value
+    ensimeJavacOptions := (javacOptions in Compile).value
   )
 
   // exposed for users to use
@@ -207,13 +203,11 @@ object EnsimePlugin extends AutoPlugin {
 
     val updateReports = ensimeMegaUpdate.run
 
-    val scalaCompilerJars = updateReports.head._2._1.select(
-      configuration = configurationFilter(EnsimeInternal.name),
-      artifact = artifactFilter(extension = Artifact.DefaultExtension)
-    ).toSet
+    val scalaCompilerJars = ensimeScalaJars.run.toSet
+    val serverJars = ensimeServerJars.run.toSet -- scalaCompilerJars
 
     // for some reason this gives the wrong number in projectData
-    val ensimeScalaV = (ensimeScalaVersion in ThisBuild).gimme
+    val ensimeScalaV = (ensimeScalaVersion in ThisBuild).run
 
     implicit val rawProjects = projects.collect {
       case (ref, proj) =>
@@ -244,22 +238,22 @@ object EnsimePlugin extends AutoPlugin {
     val javaH = (ensimeJavaHome).gimme
     val javaSrc = {
       file(javaH.getAbsolutePath + "/src.zip") match {
-        case f if f.exists => List(f)
+        case f if f.exists => Set(f)
         case _ =>
           log.warn(s"No Java sources detected in $javaH (your ENSIME experience will not be as good as it could be.)")
-          Nil
+          Set.empty
       }
     } ++ (ensimeUnmanagedSourceArchives in ThisBuild).gimme
 
     val javaFlags = ensimeJavaFlags.run.toList
 
-    val scalaVersion = (ensimeScalaVersion in ThisBuild).gimme
+    val scalaVersion = (ensimeScalaVersion in ThisBuild).run
 
     val modules = subProjects.mapValues(ensimeProjectToModule)
 
     val config = EnsimeConfig(
       root, cacheDir,
-      scalaCompilerJars,
+      scalaCompilerJars, serverJars,
       name, scalaVersion, compilerArgs,
       modules, javaH, javaFlags, javaCompilerArgs, javaSrc, subProjects
     )
@@ -333,9 +327,8 @@ object EnsimePlugin extends AutoPlugin {
 
     def configFilter(config: Configuration): ConfigurationFilter = {
       val c = config.name.toLowerCase
-      val internal = EnsimeInternal.name
-      if (sbtPlugin.gimme) configurationFilter(("provided" | c) - internal)
-      else configurationFilter(c - internal)
+      if (sbtPlugin.gimme) configurationFilter("provided" | c)
+      else configurationFilter(c)
     }
 
     def jarsFor(config: Configuration) = updateReport.select(
@@ -366,7 +359,7 @@ object EnsimePlugin extends AutoPlugin {
       }
       val target = targetForOpt(config).get
       val scalaCompilerArgs = ((scalacOptions in config).run ++
-        ensimeSuggestedScalacOptions((ensimeScalaVersion in ThisBuild).gimme)).toList
+        ensimeSuggestedScalacOptions(ensimeScalaV)).toList
       val javaCompilerArgs = (javacOptions in config).run.toList
       val jars = config match {
         case Compile => jarsFor(Compile) ++ unmanagedJarsFor(Compile) ++ jarsFor(Provided) ++ jarsFor(Optional)
@@ -485,8 +478,8 @@ object EnsimePlugin extends AutoPlugin {
     val compilerArgs = ensimeProjectScalacOptions.run.toList
     val scalaV = Properties.versionNumberString
     val javaSrc = JdkDir / "src.zip" match {
-      case f if f.exists => List(f)
-      case _             => Nil
+      case f if f.exists => Set(f)
+      case _             => Set.empty[File]
     }
     val javaFlags = ensimeJavaFlags.run.toList
 
@@ -498,17 +491,12 @@ object EnsimePlugin extends AutoPlugin {
 
     val module = ensimeProjectToModule(subProject)
 
-    val scalaCompilerJars = jars.filter { file =>
-      val f = file.getName
-      f.startsWith("scala-library") ||
-        f.startsWith("scala-compiler") ||
-        f.startsWith("scala-reflect") ||
-        f.startsWith("scalap")
-    }.toSet
+    val scalaCompilerJars = ensimeScalaProjectJars.run.toSet
+    val serverJars = ensimeServerProjectJars.run.toSet -- scalaCompilerJars
 
     val config = EnsimeConfig(
       root, cacheDir,
-      scalaCompilerJars,
+      scalaCompilerJars, serverJars,
       name, scalaV, compilerArgs,
       Map(module.name -> module), JdkDir, javaFlags, Nil, javaSrc,
       Map(subProject.name -> subProject)
@@ -558,6 +546,7 @@ case class EnsimeConfig(
   root: File,
   cacheDir: File,
   scalaCompilerJars: Set[File],
+  ensimeServerJars: Set[File],
   name: String,
   scalaVersion: String,
   compilerArgs: List[String],
@@ -565,7 +554,7 @@ case class EnsimeConfig(
   javaHome: File,
   javaFlags: List[String],
   javaCompilerArgs: List[String],
-  javaSrc: List[File],
+  javaSrc: Set[File],
   subProjects: Map[String, EnsimeProject]
 )
 
@@ -656,7 +645,14 @@ object SExpFormatter {
 
   def fsToSExp(ss: Iterable[File]): String =
     if (ss.isEmpty) "nil"
-    else ss.toSeq.sortBy { f => f.getName + f.getPath }.map(toSExp).mkString("(", " ", ")")
+    else {
+      // normalise and ensure monkeys go first
+      // (bit of a hack to do it here, maybe best when creating)
+      val (monkeys, humans) = ss.toList.distinct.sortBy { f =>
+        f.getName + f.getPath
+      }.partition(_.getName.contains("monkey"))
+      monkeys ::: humans
+    }.map(toSExp).mkString("(", " ", ")")
 
   def ssToSExp(ss: Iterable[String]): String =
     if (ss.isEmpty) "nil"
@@ -687,6 +683,7 @@ object SExpFormatter {
  :root-dir ${toSExp(c.root)}
  :cache-dir ${toSExp(c.cacheDir)}
  :scala-compiler-jars ${fsToSExp(c.scalaCompilerJars)}
+ :ensime-server-jars ${fsToSExp(c.ensimeServerJars)}
  :name "${c.name}"
  :java-home ${toSExp(c.javaHome)}
  :java-flags ${ssToSExp(c.javaFlags)}

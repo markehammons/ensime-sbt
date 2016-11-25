@@ -4,4 +4,4 @@ ivyLoggingLevel := UpdateLogging.Quiet
 
 libraryDependencies += "org.scala-sbt" % "scripted-plugin" % sbtVersion.value
 
-addSbtPlugin("com.fommil" % "sbt-sensible" % "1.0.6")
+addSbtPlugin("com.fommil" % "sbt-sensible" % "1.0.7")
