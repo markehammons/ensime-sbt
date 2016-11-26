@@ -1,6 +1,4 @@
 > ensimeConfig
-$ exists scalaVersionAtStartupWarning
-$ must-mirror scalaVersionAtStartupWarning.expect scalaVersionAtStartupWarning
 > ensimeExpect .ensime ensimeConfig.expect
 
 # BUG https://github.com/sbt/sbt/issues/2814

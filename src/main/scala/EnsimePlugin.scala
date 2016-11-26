@@ -36,6 +36,9 @@ object EnsimeKeys {
   val ensimeIgnoreMissingDirectories = settingKey[Boolean](
     "ENSIME requires declared source directories to exist. If you find this noisy, ignore them."
   )
+  val ensimeIgnoreScalaMismatch = settingKey[Boolean](
+    "ENSIME can only use one version of scala per project. If you have mixed scala versions (e.g. lib and sbt plugin), set this to acknowledge."
+  )
 
   val ensimeJavaFlags = taskKey[Seq[String]](
     "Flags to be passed to ENSIME JVM process."
@@ -110,12 +113,23 @@ object EnsimePlugin extends AutoPlugin {
     commands += Command.args("ensimeConfig", ("", ""), "Generate a .ensime for the project.", "proj1 proj2")(ensimeConfig),
     commands += Command.command("ensimeConfigProject", "", "Generate a project/.ensime for the project definition.")(ensimeConfigProject),
 
-    // would be nice to infer by majority vote
-    // https://github.com/ensime/ensime-sbt/issues/235
-    ensimeScalaVersion := scalaVersion.value,
+    ensimeScalaVersion <<= state.map { implicit s =>
+      // infer the scalaVersion by majority vote, because many badly
+      // written builds will forget to set the scalaVersion for the
+      // root project. And we can't ask for (scalaVersion in
+      // ThisBuild) because very few projects do it The Right Way.
+      implicit val struct = Project.structure(s)
+
+      val scalaVersions = struct.allProjectRefs.map { implicit p =>
+        scalaVersion.gimme
+      }.groupBy(identity).map { case (sv, svs) => sv -> svs.size }.toList
+
+      scalaVersions.sortWith { case ((_, c1), (_, c2)) => c1 < c2 }.head._1
+    },
 
     ensimeIgnoreSourcesInBase := false,
     ensimeIgnoreMissingDirectories := false,
+    ensimeIgnoreScalaMismatch := false,
 
     ensimeJavaFlags := JavaFlags,
     ensimeJavaHome := javaHome.value.getOrElse(JdkDir),
@@ -370,19 +384,18 @@ object EnsimePlugin extends AutoPlugin {
     }
 
     if (scalaVersion.gimme != ensimeScalaV) {
-      if (System.getProperty("ensime.sbt.debug") != null) {
-        // for testing
-        IO.write(file("scalaVersionAtStartupWarning"), ensimeScalaV)
-      }
-
-      log.error(
+      log.warn(
         s"""You have a different version of scala for ENSIME ($ensimeScalaV) and ${project.id} (${scalaVersion.gimme}).
-           |If this is not what you intended, use either
+           |If this is not what you intended, try fixing your build with:
            |  scalaVersion in ThisBuild := "${scalaVersion.gimme}"
-           |in your build.sbt or add
+           |in your build.sbt, or override the ENSIME scala version with:
            |  ensimeScalaVersion in ThisBuild := "${scalaVersion.gimme}"
-           |to a local ensime.sbt: http://ensime.org/build_tools/sbt/#customise""".stripMargin
+           |in a ensime.sbt: http://ensime.org/build_tools/sbt/#customise""".stripMargin
       )
+      if (!ensimeIgnoreScalaMismatch.gimme)
+        throw new IllegalStateException(
+          """To ignore this error (i.e. have have multiple scala versions), customise `ensimeIgnoreScalaMismatch`"""
+        ) with NoStackTrace
     }
 
     if (sourcesInBase.gimme) {

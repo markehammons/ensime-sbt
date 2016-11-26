@@ -1,8 +1,5 @@
-> ensimeConfig
-$ exists scalaVersionAtStartupWarning
-> ensimeExpect .ensime ensimeConfig.expect
+-> ensimeConfig
 > ensimeConfigProject
-$ exists scalaVersionAtStartupWarning
 > ensimeExpect project/.ensime ensimeConfigProject.expect
 > checkJavaOptions
 > debugging
