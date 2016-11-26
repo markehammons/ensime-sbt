@@ -33,6 +33,9 @@ object EnsimeKeys {
   val ensimeIgnoreSourcesInBase = settingKey[Boolean](
     "ENSIME doesn't support sources in base, this tolerates their existence."
   )
+  val ensimeIgnoreMissingDirectories = settingKey[Boolean](
+    "ENSIME requires declared source directories to exist. If you find this noisy, ignore them."
+  )
 
   val ensimeJavaFlags = taskKey[Seq[String]](
     "Flags to be passed to ENSIME JVM process."
@@ -112,6 +115,7 @@ object EnsimePlugin extends AutoPlugin {
     ensimeScalaVersion := scalaVersion.value,
 
     ensimeIgnoreSourcesInBase := false,
+    ensimeIgnoreMissingDirectories := false,
 
     ensimeJavaFlags := JavaFlags,
     ensimeJavaHome := javaHome.value.getOrElse(JdkDir),
@@ -270,29 +274,17 @@ object EnsimePlugin extends AutoPlugin {
     // workaround for Windows
     write(out, toSExp(transformedConfig).replaceAll("\r\n", "\n") + "\n")
 
-    if (ignoringSourceDirs.nonEmpty) {
-      log.warn(
-        s"""Some source directories do not exist and will be ignored by ENSIME.
-           |For example: ${ignoringSourceDirs.take(5).mkString(",")} """.stripMargin
-      )
-    }
-
     state
   }
 
-  // sbt reports a lot of source directories that the user never
-  // intends to use we want to create a report
-  private var ignoringSourceDirs = Set.empty[File]
-  def filteredSources(sources: Set[File], scalaBinaryVersion: String): Set[File] = synchronized {
-    ignoringSourceDirs ++= sources.filterNot { dir =>
-      // ignoring to ignore a bunch of things that most people don't care about
-      val n = dir.getName
-      dir.exists() ||
-        n.endsWith("-" + scalaBinaryVersion) ||
-        n.endsWith("java") ||
-        dir.getPath.contains("src_managed")
+  private def ensureCreatedOrIgnore(ignore: Boolean, log: Logger)(sources: Set[File]): Set[File] = {
+    sources.collect {
+      case dir if dir.isDirectory() => dir
+      case dir if !ignore =>
+        log.info(s"""Creating $dir. Read about `ensimeIgnoreMissingDirectories`""")
+        dir.mkdirs()
+        dir
     }
-    sources.filter(_.exists())
   }
 
   def projectData(
@@ -358,12 +350,13 @@ object EnsimePlugin extends AutoPlugin {
 
     def configDataFor(config: Configuration): EnsimeConfiguration = {
       val sbv = scalaBinaryVersion.gimme
-      val sources = config match {
-        case Compile =>
-          filteredSources(sourcesFor(Compile) ++ sourcesFor(Provided) ++ sourcesFor(Optional), sbv)
-        case _ =>
-          filteredSources(sourcesFor(config), sbv)
+      val sources = ensureCreatedOrIgnore(ensimeIgnoreMissingDirectories.gimme, log) {
+        config match {
+          case Compile => sourcesFor(Compile) ++ sourcesFor(Provided) ++ sourcesFor(Optional)
+          case _       => sourcesFor(config)
+        }
       }
+
       val target = targetForOpt(config).get
       val scalaCompilerArgs = ((scalacOptions in config).run ++
         ensimeSuggestedScalacOptions(ensimeScalaV)).toList

@@ -12,7 +12,7 @@
  :compiler-args ("-feature" "-deprecation" "-Xlint" "-Ywarn-dead-code" "-Ywarn-numeric-widen" "-Xfuture" "-Ymacro-no-expand")
  :subprojects ((
  :name "bad-build-scala"
- :source-roots nil
+ :source-roots ("BASE_DIR/src/main/java" "BASE_DIR/src/test/java" "BASE_DIR/target/scala-2.10/src_managed/main" "BASE_DIR/src/main/scala-2.10" "BASE_DIR/src/test/scala-2.10" "BASE_DIR/src/main/scala" "BASE_DIR/src/test/scala" "BASE_DIR/target/scala-2.10/src_managed/test")
  :targets ("BASE_DIR/target/scala-2.10/classes")
  :test-targets ("BASE_DIR/target/scala-2.10/test-classes")
  :depends-on-modules nil
@@ -22,7 +22,7 @@
  :doc-jars ("BASE_DIR/target/scala-2.10/bad-build-scala_2.10-0.1-SNAPSHOT-javadoc.jar" "IVY_DIR/cache/org.scala-lang/scala-library/docs/scala-library-2.10.6-javadoc.jar")
  :reference-source-roots ("IVY_DIR/cache/org.scala-lang/scala-library/srcs/scala-library-2.10.6-sources.jar")) (
  :name "root"
- :source-roots nil
+ :source-roots ("BASE_DIR/root/src/main/java" "BASE_DIR/root/src/test/java" "BASE_DIR/root/target/scala-2.11/src_managed/main" "BASE_DIR/root/src/main/scala-2.11" "BASE_DIR/root/src/test/scala-2.11" "BASE_DIR/root/src/main/scala" "BASE_DIR/root/src/test/scala" "BASE_DIR/root/target/scala-2.11/src_managed/test")
  :targets ("BASE_DIR/root/target/scala-2.11/classes")
  :test-targets ("BASE_DIR/root/target/scala-2.11/test-classes")
  :depends-on-modules nil
@@ -39,13 +39,13 @@
  :reference-sources ("IVY_DIR/cache/org.scala-lang/scala-library/srcs/scala-library-2.10.6-sources.jar")
  :configurations (
  (:name "compile"
- :sources nil
+ :sources ("BASE_DIR/src/main/java" "BASE_DIR/target/scala-2.10/src_managed/main" "BASE_DIR/src/main/scala-2.10" "BASE_DIR/src/main/scala")
  :targets ("BASE_DIR/target/scala-2.10/classes")
  :scalac-options ("-feature" "-deprecation" "-Xlint" "-Ywarn-dead-code" "-Ywarn-numeric-widen" "-Xfuture" "-Ymacro-no-expand")
  :javac-options nil
  :library-dependencies ("BASE_DIR/global/boot/scala-2.10.6/lib/scala-library.jar")) 
  (:name "test"
- :sources nil
+ :sources ("BASE_DIR/src/test/java" "BASE_DIR/src/test/scala-2.10" "BASE_DIR/src/test/scala" "BASE_DIR/target/scala-2.10/src_managed/test")
  :targets ("BASE_DIR/target/scala-2.10/test-classes")
  :scalac-options ("-feature" "-deprecation" "-Xlint" "-Ywarn-dead-code" "-Ywarn-numeric-widen" "-Xfuture" "-Ymacro-no-expand")
  :javac-options nil
@@ -57,13 +57,13 @@
  :reference-sources ("IVY_DIR/cache/org.scala-lang/scala-library/srcs/scala-library-2.11.8-sources.jar")
  :configurations (
  (:name "compile"
- :sources nil
+ :sources ("BASE_DIR/root/src/main/java" "BASE_DIR/root/target/scala-2.11/src_managed/main" "BASE_DIR/root/src/main/scala-2.11" "BASE_DIR/root/src/main/scala")
  :targets ("BASE_DIR/root/target/scala-2.11/classes")
  :scalac-options ("-Xlog-reflective-calls" "-feature" "-deprecation" "-Xlint" "-Ywarn-dead-code" "-Ywarn-numeric-widen" "-Xfuture" "-Ymacro-no-expand")
  :javac-options nil
  :library-dependencies ("IVY_DIR/cache/org.scala-lang/scala-library/jars/scala-library-2.11.8.jar")) 
  (:name "test"
- :sources nil
+ :sources ("BASE_DIR/root/src/test/java" "BASE_DIR/root/src/test/scala-2.11" "BASE_DIR/root/src/test/scala" "BASE_DIR/root/target/scala-2.11/src_managed/test")
  :targets ("BASE_DIR/root/target/scala-2.11/test-classes")
  :scalac-options ("-Xlog-reflective-calls" "-feature" "-deprecation" "-Xlint" "-Ywarn-dead-code" "-Ywarn-numeric-widen" "-Xfuture" "-Ymacro-no-expand")
  :javac-options nil
