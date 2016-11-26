@@ -2,17 +2,18 @@
 // Licence: Apache-2.0
 package org.ensime
 
-import SExpFormatter._
 import java.io.FileNotFoundException
 import java.lang.management.ManagementFactory
+
+import scala.collection.JavaConverters._
+import scala.util._
+import scala.util.control.NoStackTrace
+
+import SExpFormatter._
 import sbt._
 import sbt.IO._
 import sbt.Keys._
 import sbt.complete.Parsers._
-import scala.collection.JavaConverters._
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Promise}
-import scala.util._
 
 /**
  * Conventional way to define importable keys for an AutoPlugin.
@@ -27,6 +28,16 @@ object EnsimeKeys {
   )
   val ensimeJavacOptions = taskKey[Seq[String]](
     "Arguments for the java presentation compiler, extracted from the compiler flags."
+  )
+
+  val ensimeIgnoreSourcesInBase = settingKey[Boolean](
+    "ENSIME doesn't support sources in base, this tolerates their existence."
+  )
+  val ensimeIgnoreMissingDirectories = settingKey[Boolean](
+    "ENSIME requires declared source directories to exist. If you find this noisy, ignore them."
+  )
+  val ensimeIgnoreScalaMismatch = settingKey[Boolean](
+    "ENSIME can only use one version of scala per project. If you have mixed scala versions (e.g. lib and sbt plugin), set this to acknowledge."
   )
 
   val ensimeJavaFlags = taskKey[Seq[String]](
@@ -102,9 +113,23 @@ object EnsimePlugin extends AutoPlugin {
     commands += Command.args("ensimeConfig", ("", ""), "Generate a .ensime for the project.", "proj1 proj2")(ensimeConfig),
     commands += Command.command("ensimeConfigProject", "", "Generate a project/.ensime for the project definition.")(ensimeConfigProject),
 
-    // would be nice to infer by majority vote
-    // https://github.com/ensime/ensime-sbt/issues/235
-    ensimeScalaVersion := scalaVersion.value,
+    ensimeScalaVersion <<= state.map { implicit s =>
+      // infer the scalaVersion by majority vote, because many badly
+      // written builds will forget to set the scalaVersion for the
+      // root project. And we can't ask for (scalaVersion in
+      // ThisBuild) because very few projects do it The Right Way.
+      implicit val struct = Project.structure(s)
+
+      val scalaVersions = struct.allProjectRefs.map { implicit p =>
+        scalaVersion.gimme
+      }.groupBy(identity).map { case (sv, svs) => sv -> svs.size }.toList
+
+      scalaVersions.sortWith { case ((_, c1), (_, c2)) => c1 < c2 }.head._1
+    },
+
+    ensimeIgnoreSourcesInBase := false,
+    ensimeIgnoreMissingDirectories := false,
+    ensimeIgnoreScalaMismatch := false,
 
     ensimeJavaFlags := JavaFlags,
     ensimeJavaHome := javaHome.value.getOrElse(JdkDir),
@@ -263,29 +288,17 @@ object EnsimePlugin extends AutoPlugin {
     // workaround for Windows
     write(out, toSExp(transformedConfig).replaceAll("\r\n", "\n") + "\n")
 
-    if (ignoringSourceDirs.nonEmpty) {
-      log.warn(
-        s"""Some source directories do not exist and will be ignored by ENSIME.
-           |For example: ${ignoringSourceDirs.take(5).mkString(",")} """.stripMargin
-      )
-    }
-
     state
   }
 
-  // sbt reports a lot of source directories that the user never
-  // intends to use we want to create a report
-  private var ignoringSourceDirs = Set.empty[File]
-  def filteredSources(sources: Set[File], scalaBinaryVersion: String): Set[File] = synchronized {
-    ignoringSourceDirs ++= sources.filterNot { dir =>
-      // ignoring to ignore a bunch of things that most people don't care about
-      val n = dir.getName
-      dir.exists() ||
-        n.endsWith("-" + scalaBinaryVersion) ||
-        n.endsWith("java") ||
-        dir.getPath.contains("src_managed")
+  private def ensureCreatedOrIgnore(ignore: Boolean, log: Logger)(sources: Set[File]): Set[File] = {
+    sources.collect {
+      case dir if dir.isDirectory() => dir
+      case dir if !ignore =>
+        log.info(s"""Creating $dir. Read about `ensimeIgnoreMissingDirectories`""")
+        dir.mkdirs()
+        dir
     }
-    sources.filter(_.exists())
   }
 
   def projectData(
@@ -351,12 +364,13 @@ object EnsimePlugin extends AutoPlugin {
 
     def configDataFor(config: Configuration): EnsimeConfiguration = {
       val sbv = scalaBinaryVersion.gimme
-      val sources = config match {
-        case Compile =>
-          filteredSources(sourcesFor(Compile) ++ sourcesFor(Provided) ++ sourcesFor(Optional), sbv)
-        case _ =>
-          filteredSources(sourcesFor(config), sbv)
+      val sources = ensureCreatedOrIgnore(ensimeIgnoreMissingDirectories.gimme, log) {
+        config match {
+          case Compile => sourcesFor(Compile) ++ sourcesFor(Provided) ++ sourcesFor(Optional)
+          case _       => sourcesFor(config)
+        }
       }
+
       val target = targetForOpt(config).get
       val scalaCompilerArgs = ((scalacOptions in config).run ++
         ensimeSuggestedScalacOptions(ensimeScalaV)).toList
@@ -370,34 +384,31 @@ object EnsimePlugin extends AutoPlugin {
     }
 
     if (scalaVersion.gimme != ensimeScalaV) {
-      if (System.getProperty("ensime.sbt.debug") != null) {
-        // for testing
-        IO.write(file("scalaVersionAtStartupWarning"), ensimeScalaV)
-      }
-
-      log.error(
+      log.warn(
         s"""You have a different version of scala for ENSIME ($ensimeScalaV) and ${project.id} (${scalaVersion.gimme}).
-           |If this is not what you intended, use either
+           |If this is not what you intended, try fixing your build with:
            |  scalaVersion in ThisBuild := "${scalaVersion.gimme}"
-           |in your build.sbt or add
+           |in your build.sbt, or override the ENSIME scala version with:
            |  ensimeScalaVersion in ThisBuild := "${scalaVersion.gimme}"
-           |to a local ensime.sbt: http://ensime.org/build_tools/sbt/#customise""".stripMargin
+           |in a ensime.sbt: http://ensime.org/build_tools/sbt/#customise""".stripMargin
       )
+      if (!ensimeIgnoreScalaMismatch.gimme)
+        throw new IllegalStateException(
+          """To ignore this error (i.e. have have multiple scala versions), customise `ensimeIgnoreScalaMismatch`"""
+        ) with NoStackTrace
     }
 
     if (sourcesInBase.gimme) {
       val sources = baseDirectory.gimme.list().filter(_.endsWith(".scala"))
       if (sources.nonEmpty) {
-        if (System.getProperty("ensime.sbt.debug") != null) {
-          // for testing
-          IO.touch(file("sourcesInBaseDetectedWarning"))
-        }
-
-        log.error(
+        log.warn(
           s"""You have .scala files in the base of your project. Such "script style" projects
-             |are not supported by ENSIME. Simply move them into src/main/scala to get support.
+             |are not supported by ENSIME. Move them into src/main/scala to get support.
              |Please read https://github.com/ensime/ensime-server/issues/1432""".stripMargin
         )
+        if (!ensimeIgnoreSourcesInBase.gimme) {
+          throw new IllegalStateException("To ignore this error, customise `ensimeIgnoreSourcesInBase`") with NoStackTrace
+        }
       }
     }
 

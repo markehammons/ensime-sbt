@@ -7,6 +7,7 @@ scalacOptions in Compile := Seq("-Xlog-reflective-calls")
 // and not only a custom scalaOrganization, but a different version of
 // scala for ensime (uses the same org as the build)
 ensimeScalaVersion in ThisBuild := "2.11.8"
+ensimeIgnoreScalaMismatch := true
 
 // WORKAROUND https://github.com/ensime/ensime-sbt/issues/239
 // (apparently fixed in sbt 0.13.13)
