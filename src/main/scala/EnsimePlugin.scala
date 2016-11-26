@@ -2,17 +2,18 @@
 // Licence: Apache-2.0
 package org.ensime
 
-import SExpFormatter._
 import java.io.FileNotFoundException
 import java.lang.management.ManagementFactory
+
+import scala.collection.JavaConverters._
+import scala.util._
+import scala.util.control.NoStackTrace
+
+import SExpFormatter._
 import sbt._
 import sbt.IO._
 import sbt.Keys._
 import sbt.complete.Parsers._
-import scala.collection.JavaConverters._
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Promise}
-import scala.util._
 
 /**
  * Conventional way to define importable keys for an AutoPlugin.
@@ -27,6 +28,10 @@ object EnsimeKeys {
   )
   val ensimeJavacOptions = taskKey[Seq[String]](
     "Arguments for the java presentation compiler, extracted from the compiler flags."
+  )
+
+  val ensimeIgnoreSourcesInBase = settingKey[Boolean](
+    "ENSIME doesn't support sources in base, this tolerates their existence."
   )
 
   val ensimeJavaFlags = taskKey[Seq[String]](
@@ -105,6 +110,8 @@ object EnsimePlugin extends AutoPlugin {
     // would be nice to infer by majority vote
     // https://github.com/ensime/ensime-sbt/issues/235
     ensimeScalaVersion := scalaVersion.value,
+
+    ensimeIgnoreSourcesInBase := false,
 
     ensimeJavaFlags := JavaFlags,
     ensimeJavaHome := javaHome.value.getOrElse(JdkDir),
@@ -388,16 +395,14 @@ object EnsimePlugin extends AutoPlugin {
     if (sourcesInBase.gimme) {
       val sources = baseDirectory.gimme.list().filter(_.endsWith(".scala"))
       if (sources.nonEmpty) {
-        if (System.getProperty("ensime.sbt.debug") != null) {
-          // for testing
-          IO.touch(file("sourcesInBaseDetectedWarning"))
-        }
-
-        log.error(
+        log.warn(
           s"""You have .scala files in the base of your project. Such "script style" projects
-             |are not supported by ENSIME. Simply move them into src/main/scala to get support.
+             |are not supported by ENSIME. Move them into src/main/scala to get support.
              |Please read https://github.com/ensime/ensime-server/issues/1432""".stripMargin
         )
+        if (!ensimeIgnoreSourcesInBase.gimme) {
+          throw new IllegalStateException("To ignore this error, customise `ensimeIgnoreSourcesInBase`") with NoStackTrace
+        }
       }
     }
 
