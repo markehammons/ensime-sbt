@@ -20,6 +20,19 @@ object EnsimeCoursierKeys {
   val ensimeResolvers = settingKey[Seq[coursier.Repository]](
     "The resolvers to download the scala compiler and ensime-server jars"
   )
+
+  def addEnsimeScalaPlugin(module: ModuleID, args: String = ""): Seq[Setting[_]] = {
+    ensimeScalacOptions += {
+      val mod = CrossVersion(
+        ensimeScalaVersion.value,
+        CrossVersion.binaryScalaVersion(ensimeScalaVersion.value)
+      )(module.intransitive)
+      val resolvers = ensimeResolvers.value
+      val jar = EnsimeCoursierPlugin.resolve(mod)(resolvers).head
+      s"-Xplugin:${jar.getCanonicalFile}$args"
+    }
+  }
+
 }
 
 /**

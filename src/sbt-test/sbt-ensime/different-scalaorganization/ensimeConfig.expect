@@ -6,10 +6,11 @@
  :name "different-scalaorganization"
  :java-home "JDK_HOME"
  :java-flags ("-XX:MaxPermSize=256m" "-Xmx2g" "-Xss2m")
+ :java-sources ("JDK_HOME/src.zip")
  :java-compiler-args nil
  :reference-source-roots ("JDK_HOME/src.zip")
  :scala-version "2.11.8"
- :compiler-args ("-Xlog-reflective-calls" "-feature" "-deprecation" "-Xlint" "-Ywarn-dead-code" "-Ywarn-numeric-widen" "-Xfuture" "-Ywarn-unused-import" "-Ymacro-expand:discard")
+ :compiler-args ("-Xlog-reflective-calls" "-feature" "-deprecation" "-Xlint" "-Ywarn-dead-code" "-Ywarn-numeric-widen" "-Xfuture" "-Ywarn-unused-import" "-Ymacro-expand:discard" "-Xplugin:COURSIER_DIR/cache/v1/https/repo1.maven.org/maven2/org/spire-math/kind-projector_2.11/0.9.3/kind-projector_2.11-0.9.3.jar")
  :subprojects ((
  :name "different-scalaorganization"
  :source-roots ("BASE_DIR/src/main/java" "BASE_DIR/src/test/java" "BASE_DIR/target/scala-2.11/src_managed/main" "BASE_DIR/src/main/scala-2.11" "BASE_DIR/src/test/scala-2.11" "BASE_DIR/src/main/scala" "BASE_DIR/src/test/scala" "BASE_DIR/target/scala-2.11/src_managed/test")
