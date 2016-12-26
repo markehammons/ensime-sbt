@@ -691,6 +691,7 @@ object SExpFormatter {
  :name "${c.name}"
  :java-home ${toSExp(c.javaHome)}
  :java-flags ${ssToSExp(c.javaFlags)}
+ :java-sources ${fsToSExp(c.javaSrc)}
  :java-compiler-args ${ssToSExp(c.javacOptions)}
  :reference-source-roots ${fsToSExp(c.javaSrc)}
  :scala-version ${toSExp(c.scalaVersion)}

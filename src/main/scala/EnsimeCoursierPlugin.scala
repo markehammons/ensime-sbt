@@ -24,8 +24,8 @@ object EnsimeCoursierKeys {
   def addEnsimeScalaPlugin(module: ModuleID, args: String = ""): Seq[Setting[_]] = {
     ensimeScalacOptions += {
       val mod = CrossVersion(
-        ensimeScalaVersion.value: String,
-        CrossVersion.binaryScalaVersion(ensimeScalaVersion.value): String
+        ensimeScalaVersion.value,
+        CrossVersion.binaryScalaVersion(ensimeScalaVersion.value)
       )(module.intransitive)
       val resolvers = ensimeResolvers.value
       val jar = EnsimeCoursierPlugin.resolve(mod)(resolvers).head

@@ -6,6 +6,7 @@
  :name "simple-build-scala"
  :java-home "JDK_HOME"
  :java-flags ("-XX:MaxPermSize=256m" "-Xmx2g" "-Xss2m")
+ :java-sources ("JDK_HOME/src.zip")
  :java-compiler-args ("-source" "1.6" "-target" "1.6")
  :reference-source-roots ("JDK_HOME/src.zip")
  :scala-version "2.10.6"
