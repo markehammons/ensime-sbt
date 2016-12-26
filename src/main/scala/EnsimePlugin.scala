@@ -19,6 +19,10 @@ import sbt.complete.Parsers._
  * Conventional way to define importable keys for an AutoPlugin.
  */
 object EnsimeKeys {
+  val ensimeServerIndex = taskKey[Unit](
+    "Start up the ENSIME server and index your project."
+  )
+
   // for ensimeConfig
   val ensimeName = settingKey[String](
     "Name of the ENSIME project"
@@ -164,6 +168,9 @@ object EnsimePlugin extends AutoPlugin {
   )
 
   override lazy val projectSettings = Seq(
+    aggregate in ensimeServerIndex := false,
+    ensimeServerIndex := ensimeServerIndexTask.value,
+
     ensimeUnmanagedSourceArchives := Nil,
     ensimeUnmanagedJavadocArchives := Nil,
     ensimeConfigTransformer := identity,
@@ -192,6 +199,26 @@ object EnsimePlugin extends AutoPlugin {
         case _                       => Nil
       }
     }
+
+  def ensimeServerIndexTask: Def.Initialize[Task[Unit]] = Def.task {
+    val javaH = ensimeJavaHome.value
+    val java = javaH / "bin/java"
+    val scalaCompilerJars = ensimeScalaJars.value.toSet
+    val jars = ensimeServerJars.value.toSet ++ scalaCompilerJars + javaH / "lib/tools.jar"
+    val jvmFlags = ensimeJavaFlags.value ++ Seq("-Densime.config=.ensime", "-Densime.exitAfterIndex=true")
+
+    file(".ensime_cache").mkdirs()
+
+    val options = ForkOptions(Some(javaH), runJVMOptions = jvmFlags)
+    toError(
+      new ForkRun(options).run(
+        "org.ensime.server.Server",
+        orderFiles(jars),
+        Nil,
+        streams.value.log
+      )
+    )
+  }
 
   def ensimeConfig: (State, Seq[String]) => State = { (state, args) =>
     val extracted = Project.extract(state)
@@ -553,6 +580,15 @@ object EnsimePlugin extends AutoPlugin {
     }
   }
 
+  // normalise and ensure monkeys go first
+  // (bit of a hack to do it here, maybe best when creating)
+  private[ensime] def orderFiles(ss: Iterable[File]): List[File] = {
+    val (monkeys, humans) = ss.toList.distinct.sortBy { f =>
+      f.getName + f.getPath
+    }.partition(_.getName.contains("monkey"))
+    monkeys ::: humans
+  }
+
 }
 
 case class EnsimeConfig(
@@ -653,14 +689,7 @@ object SExpFormatter {
 
   def fsToSExp(ss: Iterable[File]): String =
     if (ss.isEmpty) "nil"
-    else {
-      // normalise and ensure monkeys go first
-      // (bit of a hack to do it here, maybe best when creating)
-      val (monkeys, humans) = ss.toList.distinct.sortBy { f =>
-        f.getName + f.getPath
-      }.partition(_.getName.contains("monkey"))
-      monkeys ::: humans
-    }.map(toSExp).mkString("(", " ", ")")
+    else EnsimePlugin.orderFiles(ss).map(toSExp).mkString("(", " ", ")")
 
   def ssToSExp(ss: Iterable[String]): String =
     if (ss.isEmpty) "nil"
