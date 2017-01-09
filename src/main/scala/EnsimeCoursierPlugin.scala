@@ -79,14 +79,14 @@ object EnsimeCoursierPlugin extends AutoPlugin {
     )
 
     val fetch = coursier.Fetch.from(repos, coursier.Cache.fetch())
-    val resolved = resolution.process.run(fetch).run
+    val resolved = resolution.process.run(fetch).unsafePerformSync
     resolved.errors.foreach { err =>
       throw new RuntimeException(s"failed to resolve $err")
     }
 
     Task.gatherUnordered(
       resolved.artifacts.map(coursier.Cache.file(_).run)
-    ).run.map {
+    ).unsafePerformSync.map {
         case -\/(err)  => throw new RuntimeException(err.message)
         case \/-(file) => file
       }

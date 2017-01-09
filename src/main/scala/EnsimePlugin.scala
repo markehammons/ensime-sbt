@@ -102,6 +102,12 @@ object EnsimeKeys {
     "A function that is applied to a generated ENSIME project config. Equivalent of 'configTransformer' task, " +
       "on the build level."
   )
+
+  val ensimeCachePrefix = settingKey[Option[File]](
+    "Instead of putting the cache directory in the base directory, put it under this directory. " +
+      "Useful if you want to put on a faster (local or RAM). " +
+      "Will break clients that expect the cache to be in the project root."
+  )
 }
 
 object EnsimePlugin extends AutoPlugin {
@@ -134,6 +140,8 @@ object EnsimePlugin extends AutoPlugin {
     ensimeIgnoreSourcesInBase := false,
     ensimeIgnoreMissingDirectories := false,
     ensimeIgnoreScalaMismatch := false,
+
+    ensimeCachePrefix := None,
 
     ensimeJavaFlags := JavaFlags,
     ensimeJavaHome := javaHome.value.getOrElse(JdkDir),
@@ -206,8 +214,9 @@ object EnsimePlugin extends AutoPlugin {
     val scalaCompilerJars = ensimeScalaJars.value.toSet
     val jars = ensimeServerJars.value.toSet ++ scalaCompilerJars + javaH / "lib/tools.jar"
     val jvmFlags = ensimeJavaFlags.value ++ Seq("-Densime.config=.ensime", "-Densime.exitAfterIndex=true")
+    val cache = cacheDir(ensimeCachePrefix.value, file("."))
 
-    file(".ensime_cache").mkdirs()
+    cache.mkdirs()
 
     val options = ForkOptions(Some(javaH), runJVMOptions = jvmFlags)
     toError(
@@ -282,7 +291,6 @@ object EnsimePlugin extends AutoPlugin {
 
     val root = file(Properties.userDir)
     val out = file(".ensime")
-    val cacheDir = file(".ensime_cache")
     val name = (ensimeName).gimmeOpt.getOrElse {
       if (subProjects.size == 1) subProjects.head.id.project
       else root.getAbsoluteFile.getName
@@ -305,7 +313,7 @@ object EnsimePlugin extends AutoPlugin {
     val modules = subProjects.groupBy(_.id.project).mapValues(ensimeProjectsToModule)
 
     val config = EnsimeConfig(
-      root, cacheDir,
+      root, cacheDir(ensimeCachePrefix.gimme, root),
       scalaCompilerJars, serverJars,
       name, scalaVersion, compilerArgs,
       modules, javaH, javaFlags, javaCompilerArgs, javaSrc, subProjects
@@ -513,7 +521,6 @@ object EnsimePlugin extends AutoPlugin {
 
     val root = file(Properties.userDir) / "project"
     val out = root / ".ensime"
-    val cacheDir = root / ".ensime_cache"
     val name = ensimeName.gimmeOpt.getOrElse {
       file(Properties.userDir).getName
     } + "-project"
@@ -535,7 +542,7 @@ object EnsimePlugin extends AutoPlugin {
     val serverJars = ensimeServerProjectJars.run.toSet -- scalaCompilerJars + javaH / "lib/tools.jar"
 
     val config = EnsimeConfig(
-      root, cacheDir,
+      root, cacheDir(ensimeCachePrefix.gimme, root),
       scalaCompilerJars, serverJars,
       name, scalaV, compilerArgs,
       Map(module.name -> module), javaH, javaFlags, Nil, javaSrc,
@@ -578,6 +585,11 @@ object EnsimePlugin extends AutoPlugin {
       case Some(has) => raw
       case None      => "-Xss2m" :: raw
     }
+  }
+
+  private def cacheDir(prefix: Option[File], base: File): File = prefix match {
+    case None      => base / ".ensime_cache"
+    case Some(pre) => pre / s"${base.getCanonicalPath}/.ensime_cache"
   }
 
   // normalise and ensure monkeys go first
