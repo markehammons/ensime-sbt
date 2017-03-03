@@ -56,6 +56,7 @@ object EnsimeSbtTestSupport extends AutoPlugin {
             replace("C:/Users/appveyor/.ivy2", "IVY_DIR").
             replace(Properties.userHome + "/.coursier", "COURSIER_DIR").
             replace("C:/Users/appveyor/.coursier", "COURSIER_DIR").
+            replace("https/repository.jboss.org", "https/repo1.maven.org/maven2"). // maven central hashcode mismatches
             replaceAll("""/usr/lib/jvm/[^/"]++""", "JDK_HOME").
             replaceAll("""/opt/zulu[/]?[^/"]++""", "JDK_HOME").
             replaceAll("""/Library/Java/JavaVirtualMachines/[^/]+/Contents/Home""", "JDK_HOME").
