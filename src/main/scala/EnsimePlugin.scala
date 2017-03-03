@@ -445,7 +445,7 @@ object EnsimePlugin extends AutoPlugin {
       )
       if (!ensimeIgnoreScalaMismatch.gimme)
         throw new IllegalStateException(
-          s"""To ignore this error (i.e. you have multiple scala versions), customize `ensimeIgnoreScalaMismatch in ThisBuild := true` or `ensimeIgnoreScalaMismatch in LocalProject("${project.id}") := true`"""
+          s"""To ignore this error (i.e. you have multiple scala versions), customise `ensimeIgnoreScalaMismatch in ThisBuild := true` or `ensimeIgnoreScalaMismatch in LocalProject("${project.id}") := true`"""
         ) with NoStackTrace
     }
 
