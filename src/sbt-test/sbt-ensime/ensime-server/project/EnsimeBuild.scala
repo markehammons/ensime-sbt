@@ -15,10 +15,7 @@ object EnsimeBuild extends Build {
   lazy override val settings = super.settings ++ Seq(
     scalaVersion := "2.11.8",
     organization := "org.ensime",
-    version := "1.0.0-SNAPSHOT",
-
-    // WORKAROUND bad maven central jar
-    resolvers += "JBoss" at "https://repository.jboss.org/"
+    version := "1.0.0-SNAPSHOT"
   )
 
   lazy val commonSettings = Sensible.settings ++ Seq(
