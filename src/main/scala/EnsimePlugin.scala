@@ -123,7 +123,7 @@ object EnsimePlugin extends AutoPlugin {
     commands += Command.args("ensimeConfig", ("", ""), "Generate a .ensime for the project.", "proj1 proj2")(ensimeConfig),
     commands += Command.command("ensimeConfigProject", "", "Generate a project/.ensime for the project definition.")(ensimeConfigProject),
 
-    ensimeScalaVersion <<= state.map { implicit s =>
+    ensimeScalaVersion := state.map { implicit s =>
       // infer the scalaVersion by majority vote, because many badly
       // written builds will forget to set the scalaVersion for the
       // root project. And we can't ask for (scalaVersion in
@@ -135,7 +135,7 @@ object EnsimePlugin extends AutoPlugin {
       }.groupBy(identity).map { case (sv, svs) => sv -> svs.size }.toList
 
       scalaVersions.sortWith { case ((_, c1), (_, c2)) => c1 < c2 }.head._1
-    },
+    }.value,
 
     ensimeIgnoreSourcesInBase := false,
     ensimeIgnoreMissingDirectories := false,
@@ -147,7 +147,7 @@ object EnsimePlugin extends AutoPlugin {
     ensimeJavaHome := javaHome.value.getOrElse(JdkDir),
     // unable to infer the user's scalac options: https://github.com/ensime/ensime-sbt/issues/98
     ensimeProjectScalacOptions := ensimeSuggestedScalacOptions(Properties.versionNumberString),
-    ensimeMegaUpdate <<= Keys.state.flatMap { implicit s =>
+    ensimeMegaUpdate := Keys.state.flatMap { implicit s =>
 
       def checkCoursier(): Unit = {
         val structure = Project.extract(s).structure
@@ -172,7 +172,7 @@ object EnsimePlugin extends AutoPlugin {
           (p, (updateReport(p), updateClassifiersReport(p)))
         }.toMap
       }
-    }
+    }.value
   )
 
   override lazy val projectSettings = Seq(
