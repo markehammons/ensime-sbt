@@ -25,7 +25,7 @@ ivyLoggingLevel := UpdateLogging.Quiet
 addSbtPlugin("com.eed3si9n" % "sbt-buildinfo" % "0.6.0")
 
 // to match sbt-ensime's CI
-addSbtPlugin("io.get-coursier" % "sbt-coursier" % "1.0.0-M15-1")
+addSbtPlugin("io.get-coursier" % "sbt-coursier" % "1.0.0-M15-5")
 
 // to WORKAROUND a bad jar on maven central
 resolvers += "JBoss" at "https://repository.jboss.org/"
