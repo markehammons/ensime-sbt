@@ -72,7 +72,13 @@ private[ensime] object CoursierHelper {
     }.toSet
     )
 
-    val fetch = coursier.Fetch.from(repos, coursier.Cache.fetch())
+    val fetch = coursier.Fetch.from(
+      repos,
+      coursier.Cache.fetch(cachePolicy = coursier.CachePolicy.default.head),
+      coursier.CachePolicy.default.tail.map(p =>
+        coursier.Cache.fetch(cachePolicy = p)): _*
+    )
+
     val resolved = resolution.process.run(fetch).unsafePerformSync
     resolved.errors.foreach { err =>
       throw new RuntimeException(s"failed to resolve $err")
