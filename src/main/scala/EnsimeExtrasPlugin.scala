@@ -183,18 +183,17 @@ object EnsimeExtrasPlugin extends AutoPlugin {
     val (extraOpts, files) = args.partition(_.startsWith("-"))
     val opts = baseOpts ++ extraOpts
 
-    if (files.isEmpty) throw new IllegalArgumentException("needs a file")
-    files.foreach { arg =>
-      val input: File = fileInProject(arg, dirs.map(_.getCanonicalFile))
-
-      if (!out.exists()) IO.createDirectory(out)
-      s.log.info(s"""Compiling $input with ${opts.mkString(" ")}""")
-
-      cs.scalac(
-        Seq(input), noChanges, cp.map(_.data) :+ out, out, opts,
-        noopCallback, merrs, in.incSetup.cache, s.log
-      )
+    val input = files.map { arg =>
+      fileInProject(arg, dirs.map(_.getCanonicalFile))
     }
+
+    if (!out.exists()) IO.createDirectory(out)
+    s.log.info(s"""Compiling $input with ${opts.mkString(" ")}""")
+
+    cs.scalac(
+      input, noChanges, cp.map(_.data) :+ out, out, opts,
+      noopCallback, merrs, in.incSetup.cache, s.log
+    )
   }
 
   // it would be good if debuggingOff was automatically triggered
