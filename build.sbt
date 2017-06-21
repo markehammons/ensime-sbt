@@ -6,9 +6,6 @@ sbtPlugin := true
 sonatypeGithub := ("ensime", "ensime-sbt")
 licenses := Seq(Apache2)
 
-publishArtifact in (Compile, packageDoc) := false
-publishArtifact in packageDoc := false
-
 enablePlugins(ShadingPlugin)
 shadingNamespace := "ensime.shaded"
 publish := publish.in(Shading).value
