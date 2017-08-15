@@ -24,6 +24,14 @@ object EnsimeKeys {
     "Start up the ENSIME server and index your project."
   )
 
+  val ensimeConfig = inputKey[Unit](
+    "Generate a .ensime for the project."
+  )
+
+  val ensimeConfigProject = taskKey[Unit](
+    "Generate a project/.ensime for the project definition."
+  )
+
   val ensimeServerVersion = taskKey[String](
     "The ensime server version"
   )
@@ -129,22 +137,19 @@ object EnsimePlugin extends AutoPlugin {
     // WORKAROUND: https://github.com/sbt/sbt/issues/2814
     scalaOrganization in updateSbtClassifiers := (scalaOrganization in Global).value,
 
-    commands += Command.args("ensimeConfig", ("", ""), "Generate a .ensime for the project.", "proj1 proj2")(ensimeConfig),
-    commands += Command.command("ensimeConfigProject", "", "Generate a project/.ensime for the project definition.")(ensimeConfigProject),
-
-    ensimeScalaVersion := state.map { implicit s =>
+    ensimeScalaVersion := {
       // infer the scalaVersion by majority vote, because many badly
       // written builds will forget to set the scalaVersion for the
       // root project. And we can't ask for (scalaVersion in
       // ThisBuild) because very few projects do it The Right Way.
-      implicit val struct = Project.structure(s)
+      implicit val struct = Project.structure(state.value)
 
       val scalaVersions = struct.allProjectRefs.map { implicit p =>
-        scalaVersion.gimme
+        scalaVersion.value
       }.groupBy(identity).map { case (sv, svs) => sv -> svs.size }.toList
 
       scalaVersions.sortWith { case ((_, c1), (_, c2)) => c1 < c2 }.head._1
-    }.value,
+    },
 
     ensimeServerVersion := {
       CrossVersion.partialVersion(ensimeScalaVersion.value) match {
@@ -207,7 +212,13 @@ object EnsimePlugin extends AutoPlugin {
       (scalacOptions in Compile).value ++
       ensimeSuggestedScalacOptions((ensimeScalaVersion in ThisBuild).value)
     ).distinct,
-    ensimeJavacOptions := (javacOptions in Compile).value
+    ensimeJavacOptions := (javacOptions in Compile).value,
+
+    ensimeConfig := ensimeConfigTask.evaluated,
+    ensimeConfigProject := ensimeConfigProjectTask.value,
+
+    aggregate in ensimeConfig := false,
+    aggregate in ensimeConfigProject := false
   )
 
   // exposed for users to use
@@ -245,18 +256,22 @@ object EnsimePlugin extends AutoPlugin {
     ).foreach(sys.error)
   }
 
-  def ensimeConfig: (State, Seq[String]) => State = { (state, args) =>
-    val extracted = Project.extract(state)
-    implicit val st = state
-    implicit val pr = extracted.currentRef
+  def ensimeConfigTask = Def.inputTask {
+    val args = Def.spaceDelimited().parsed
+
+    val extracted = Project.extract(state.value)
+    implicit val st = state.value
     implicit val bs = extracted.structure
+
+    val allProjects = thisProject.all(ScopeFilter(inAnyProject, inAnyConfiguration)).value
+    val allProjectRefs = thisProjectRef.all(ScopeFilter(inAnyProject, inAnyConfiguration)).value
 
     var transitiveCache = Map.empty[ProjectRef, Set[ProjectRef]]
     def transitiveProjects(ref: ProjectRef): Set[ProjectRef] = {
       if (transitiveCache.contains(ref))
         transitiveCache(ref)
       else {
-        val proj = Project.getProjectForReference(ref, bs).get
+        val proj = allProjects.find(_.id == ref.project).get
         val deps = Set(ref) ++ proj.dependencies.flatMap { dep =>
           transitiveProjects(dep.project)
         }
@@ -266,32 +281,32 @@ object EnsimePlugin extends AutoPlugin {
     }
 
     val active =
-      if (args.isEmpty) bs.allProjectRefs
+      if (args.isEmpty) allProjectRefs
       else args.flatMap { name =>
-        val ref = bs.allProjectRefs.find(_.project == name).getOrElse {
+        val ref = allProjectRefs.find(_.project == name).getOrElse {
           throw new IllegalArgumentException(s"$name is not a valid project id")
         }
         transitiveProjects(ref)
       }
 
     val projects = active.flatMap { ref =>
-      Project.getProjectForReference(ref, bs).map((ref, _))
+      allProjects.find(_.id == ref.project).map((ref, _))
     }.toMap
 
-    val updateReports = ensimeMegaUpdate.run
+    val updateReports = ensimeMegaUpdate.value
 
-    val javaH = (ensimeJavaHome).gimme
-    val scalaCompilerJars = ensimeScalaJars.run.toSet
-    val serverJars = ensimeServerJars.run.toSet -- scalaCompilerJars + javaH / "lib/tools.jar"
-    val serverVersion = ensimeServerVersion.run
+    val javaH = ensimeJavaHome.value
+    val scalaCompilerJars = ensimeScalaJars.value.toSet
+    val serverJars = ensimeServerJars.value.toSet -- scalaCompilerJars + javaH / "lib/tools.jar"
+    val serverVersion = ensimeServerVersion.value
 
     // for some reason this gives the wrong number in projectData
-    val ensimeScalaV = (ensimeScalaVersion in ThisBuild).run
+    val ensimeScalaV = (ensimeScalaVersion in ThisBuild).value
 
     implicit val rawProjects = projects.flatMap {
       case (ref, proj) =>
         val (updateReport, updateClassifiersReport) = updateReports(ref)
-        val projects = projectData(ensimeScalaV, proj, updateReport, updateClassifiersReport)(ref, bs, state)
+        val projects = projectData(ensimeScalaV, proj, updateReport, updateClassifiersReport)(ref, bs, st)
         projects.map { p => (p.id, p) }
     }.toMap
 
@@ -308,40 +323,38 @@ object EnsimePlugin extends AutoPlugin {
 
     val root = file(Properties.userDir)
     val out = file(".ensime")
-    val name = (ensimeName).gimmeOpt.getOrElse {
+    val name = (ensimeName).?.value.getOrElse {
       if (subProjects.size == 1) subProjects.head.id.project
       else root.getAbsoluteFile.getName
     }
-    val compilerArgs = (ensimeScalacOptions).run.toList
-    val javaCompilerArgs = (ensimeJavacOptions).run.toList
+    val compilerArgs = (ensimeScalacOptions).value.toList
+    val javaCompilerArgs = (ensimeJavacOptions).value.toList
     val javaSrc = {
       file(javaH.getAbsolutePath + "/src.zip") match {
         case f if f.exists => Set(f)
         case _ =>
-          log.warn(s"No Java sources detected in $javaH (your ENSIME experience will not be as good as it could be.)")
+          state.value.log.warn(s"No Java sources detected in $javaH (your ENSIME experience will not be as good as it could be.)")
           Set.empty
       }
-    } ++ (ensimeUnmanagedSourceArchives in ThisBuild).gimme
+    } ++ ensimeUnmanagedSourceArchives.value
 
-    val javaFlags = ensimeJavaFlags.run.toList
+    val javaFlags = ensimeJavaFlags.value.toList
 
-    val scalaVersion = (ensimeScalaVersion in ThisBuild).run
+    val scalaVersion = (ensimeScalaVersion in ThisBuild).value
 
     val modules = subProjects.groupBy(_.id.project).mapValues(ensimeProjectsToModule)
 
     val config = EnsimeConfig(
-      root, cacheDir(ensimeCachePrefix.gimme, root),
+      root, cacheDir(ensimeCachePrefix.value, root),
       scalaCompilerJars, serverJars, serverVersion,
       name, scalaVersion, compilerArgs,
       modules, javaH, javaFlags, javaCompilerArgs, javaSrc, subProjects
     )
 
-    val transformedConfig = ensimeConfigTransformer.gimme.apply(config)
+    val transformedConfig = ensimeConfigTransformer.value.apply(config)
 
     // workaround for Windows
     write(out, toSExp(transformedConfig).replaceAll("\r\n", "\n") + "\n")
-
-    state
   }
 
   // WORKAROUND: https://github.com/ensime/ensime-sbt/issues/334 when
@@ -523,10 +536,9 @@ object EnsimePlugin extends AutoPlugin {
     )
   }
 
-  def ensimeConfigProject: State => State = { implicit state: State =>
-    val extracted = Project.extract(state)
+  def ensimeConfigProjectTask = Def.task {
+    val extracted = Project.extract(state.value)
 
-    implicit val pr = extracted.currentRef
     implicit val bs = extracted.structure
 
     val jars = for {
@@ -542,7 +554,7 @@ object EnsimePlugin extends AutoPlugin {
     } yield dir
 
     val classifiers = for {
-      config <- updateSbtClassifiers.run.configurations
+      config <- updateSbtClassifiers.value.configurations
       module <- config.modules
       artefact <- module.artifacts
       if jarOrZipFile(artefact._2)
@@ -558,40 +570,38 @@ object EnsimePlugin extends AutoPlugin {
 
     val root = file(Properties.userDir) / "project"
     val out = root / ".ensime"
-    val name = ensimeName.gimmeOpt.getOrElse {
+    val name = ensimeName.?.value.getOrElse {
       file(Properties.userDir).getName
     } + "-project"
 
-    val compilerArgs = ensimeProjectScalacOptions.run.toList
+    val compilerArgs = ensimeProjectScalacOptions.value.toList
     val scalaV = Properties.versionNumberString
-    val javaH = ensimeJavaHome.gimme
+    val javaH = ensimeJavaHome.value
     val javaSrc = javaH / "src.zip" match {
       case f if f.exists => Set(f)
       case _             => Set.empty[File]
     }
-    val javaFlags = ensimeJavaFlags.run.toList
+    val javaFlags = ensimeJavaFlags.value.toList
 
     val id = EnsimeProjectId(name, "compile")
     val proj = EnsimeProject(id, Nil, Set(root), targets.toSet, Nil, Nil, jars.toSet, srcs.toSet, docs.toSet)
     val module = ensimeProjectsToModule(Set(proj))
 
-    val scalaCompilerJars = ensimeScalaProjectJars.run.toSet
-    val serverJars = ensimeServerProjectJars.run.toSet -- scalaCompilerJars + javaH / "lib/tools.jar"
-    val serverVersion = ensimeProjectServerVersion.gimme
+    val scalaCompilerJars = ensimeScalaProjectJars.value.toSet
+    val serverJars = ensimeServerProjectJars.value.toSet -- scalaCompilerJars + javaH / "lib/tools.jar"
+    val serverVersion = ensimeProjectServerVersion.value
 
     val config = EnsimeConfig(
-      root, cacheDir(ensimeCachePrefix.gimme, root),
+      root, cacheDir(ensimeCachePrefix.value, root),
       scalaCompilerJars, serverJars, serverVersion,
       name, scalaV, compilerArgs,
       Map(module.name -> module), javaH, javaFlags, Nil, javaSrc,
       Seq(proj)
     )
 
-    val transformedConfig = ensimeConfigTransformerProject.gimme.apply(config)
+    val transformedConfig = ensimeConfigTransformerProject.value.apply(config)
 
     write(out, toSExp(transformedConfig).replaceAll("\r\n", "\n") + "\n")
-
-    state
   }
 
   // WORKAROUND: https://github.com/typelevel/scala/issues/75
