@@ -3,12 +3,18 @@
 package org.ensime
 
 import EnsimeKeys._
+import sbt.Defaults.{loadForParser => _, toError => _, _}
 import sbt._
 import sbt.Keys._
+import sbt.Tests.Execution
 import sbt.complete.{DefaultParsers, Parser}
+
 import scalariform.formatter.ScalaFormatter
 import scalariform.formatter.preferences._
 import scalariform.parser.ScalaParserException
+import sbt.complete.Parsers._
+import sbt.complete.Parser._
+import sbt.testing.{Framework, Runner}
 
 object EnsimeExtrasKeys {
 
@@ -20,6 +26,10 @@ object EnsimeExtrasKeys {
   )
   val ensimeDebuggingPort = settingKey[Int](
     "Port for remote debugging of forked tasks."
+  )
+
+  val ensimeDebuggingArgs = settingKey[Seq[String]](
+    "Java args for for debugging"
   )
 
   val ensimeCompileOnly = inputKey[Unit](
@@ -42,6 +52,10 @@ object EnsimeExtrasKeys {
   val ensimeScalariformOnly = inputKey[Unit](
     "Formats a single scala file"
   )
+
+  val ensimeTestOnlyDebug = inputKey[Unit](
+    "The equivalent of ensimeRunDebug for testOnly command"
+  )
 }
 
 object EnsimeExtrasPlugin extends AutoPlugin {
@@ -51,19 +65,28 @@ object EnsimeExtrasPlugin extends AutoPlugin {
   override def trigger = allRequirements
   val autoImport = EnsimeExtrasKeys
 
-  override lazy val buildSettings = Seq(
-    commands += Command.command("debugging", "", "Add debugging flags to all forked JVM processes.")(toggleDebugging(true)),
-    commands += Command.command("debuggingOff", "", "Remove debugging flags from all forked JVM processes.")(toggleDebugging(false))
+  private val emptyExtraArgs = settingKey[Seq[String]](
+    "Stub key for tasks that accepts extra args"
+  )
+
+  private val emptyExtraEnv = settingKey[Map[String, String]](
+    "Stub key for tasks that accepts extra env args"
   )
 
   override lazy val projectSettings = Seq(
     ensimeDebuggingFlag := "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=",
     ensimeDebuggingPort := 5005,
-    ensimeRunMain in Compile := parseAndRunMainWithSettings(Compile).evaluated,
-    ensimeRunDebug in Compile := parseAndRunMainWithSettings(
+    emptyExtraArgs := Seq.empty[String],
+    emptyExtraEnv := Map.empty[String, String],
+    ensimeDebuggingArgs := Seq(s"${ensimeDebuggingFlag.value}${ensimeDebuggingPort.value}"),
+    ensimeRunMain in Compile := parseAndRunMainWithStaticSettings(Compile).evaluated,
+    ensimeRunDebug in Compile := parseAndRunMainWithDynamicSettings(
       Compile,
-      // use ensimeDebugging{Flag,Port} https://github.com/ensime/ensime-sbt/issues/228
-      extraArgs = Seq(s"-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005")
+      extraArgs = ensimeDebuggingArgs
+    ).evaluated,
+    ensimeTestOnlyDebug in Test := testOnlyWithSettings(
+      Test,
+      extraArgs = ensimeDebuggingArgs
     ).evaluated,
     ensimeLaunchConfigurations := Nil,
     ensimeLaunch in Compile := launchTask(Compile).evaluated,
@@ -98,29 +121,75 @@ object EnsimeExtrasPlugin extends AutoPlugin {
     }
   }
 
-  def parseAndRunMainWithSettings(
+  val ensimeTestOnlyParser: Parser[(String, Seq[String])] = {
+    import DefaultParsers._
+
+    val selectTest = token(Space) ~> token(NotSpace & not("--", "-- in test"))
+    val options = (token(Space) ~> token("--") ~> spaceDelimited("<option>")) ?? Nil
+    selectTest ~ options
+  }
+
+  private def runMain(
+    javaArgs: JavaArgs,
+    classpath: Keys.Classpath,
+    javaOptions: Seq[String],
+    envVars: Map[String, String],
+    baseDir: File,
+    log: Logger,
+    extraArgs: Seq[String] = Seq.empty,
+    extraEnv: Map[String, String] = Map.empty
+  ): Unit = {
+    val newJvmArgs = (javaOptions ++ extraArgs ++ javaArgs.jvmArgs).distinct
+    val newEnvArgs = envVars ++ extraEnv ++ javaArgs.envArgs
+    val options = ForkOptions(
+      runJVMOptions = newJvmArgs,
+      envVars = newEnvArgs,
+      workingDirectory = Some(baseDir)
+    )
+    log.debug(s"launching $options ${javaArgs.mainClass} $newJvmArgs ${javaArgs.classArgs}")
+    new ForkRun(options).run(
+      javaArgs.mainClass,
+      Attributed.data(classpath),
+      javaArgs.classArgs,
+      log
+    ).foreach(sys.error)
+  }
+
+  def parseAndRunMainWithStaticSettings(
     config: Configuration,
     extraEnv: Map[String, String] = Map.empty,
     extraArgs: Seq[String] = Seq.empty
   ): Def.Initialize[InputTask[Unit]] = {
     val parser = (s: State) => ensimeRunMainTaskParser
     Def.inputTask {
-      val log = (streams in config).value.log
-      val args = parser.parsed
-      val newJvmArgs = ((javaOptions in config).value ++ extraArgs ++ args.jvmArgs).distinct
-      val newEnvArgs = (envVars in config).value ++ extraEnv ++ args.envArgs
-      val options = ForkOptions(
-        runJVMOptions = newJvmArgs,
-        envVars = newEnvArgs,
-        workingDirectory = Some((baseDirectory in config).value)
+      runMain(
+        parser.parsed,
+        (fullClasspath in config).value,
+        (javaOptions in config).value,
+        (envVars in config).value,
+        (baseDirectory in config).value,
+        (streams in config).value.log
       )
-      log.debug(s"launching $options ${args.mainClass} $newJvmArgs ${args.classArgs}")
-      new ForkRun(options).run(
-        args.mainClass,
-        Attributed.data((fullClasspath in config).value),
-        args.classArgs,
-        log
-      ).foreach(sys.error)
+    }
+  }
+
+  def parseAndRunMainWithDynamicSettings(
+    config: Configuration,
+    extraEnv: SettingKey[Map[String, String]] = emptyExtraEnv,
+    extraArgs: SettingKey[Seq[String]] = emptyExtraArgs
+  ): Def.Initialize[InputTask[Unit]] = {
+    val parser = (s: State) => ensimeRunMainTaskParser
+    Def.inputTask {
+      runMain(
+        parser.parsed,
+        (fullClasspath in config).value,
+        (javaOptions in config).value,
+        (envVars in config).value,
+        (baseDirectory in config).value,
+        (streams in config).value.log,
+        extraArgs.value,
+        extraEnv.value
+      )
     }
   }
 
@@ -145,6 +214,76 @@ object EnsimeExtrasPlugin extends AutoPlugin {
         ).foreach(sys.error)
       }
   }
+
+  private def testOnlyWithSettingsTask(
+    settings: (String, Seq[String]),
+    extraArgs: Seq[String],
+    extraEnv: Map[String, String],
+    config: Configuration,
+    tests: Seq[TestDefinition],
+    s: TaskStreams,
+    st: State,
+    exec: Execution,
+    frameworks: Map[TestFramework, Framework],
+    loader: ClassLoader,
+    javaOps: Seq[String],
+    eVars: Map[String, String],
+    baseDir: File,
+    cp: Classpath,
+    trl: TestResultLogger,
+    scoped: Def.ScopedKey[_]
+  ) = {
+    val (selected, frameworkOptions) = settings
+    implicit val display = Project.showContextKey(st)
+    val modifiedOpts = Tests.Argument(frameworkOptions: _*) +: exec.options
+    val newConfig = exec.copy(options = modifiedOpts)
+
+    val runners = createTestRunners(frameworks, loader, newConfig)
+    val test = tests.find(_.name == selected)
+    if (test.isDefined) {
+      val forkOpts = ForkOptions(
+        runJVMOptions = javaOps ++ extraArgs,
+        envVars = eVars ++ extraEnv,
+        workingDirectory = Some(baseDir)
+      )
+      val output = SbtHelper.constructForkTests(
+        runners, List(test.get), newConfig, cp.files, forkOpts, s.log, Tags.ForkedTestGroup
+      )
+
+      val taskName = display(scoped)
+      val processed = output.map(out => trl.run(s.log, out, taskName))
+      Def.value(processed)
+    } else {
+      s.log.warn(s"There's no test with name $selected")
+      Def.value(constant(()))
+    }
+  }
+
+  private def testOnlyWithSettings(
+    config: Configuration,
+    extraArgs: SettingKey[Seq[String]] = emptyExtraArgs,
+    extraEnv: SettingKey[Map[String, String]] = emptyExtraEnv
+  ): Def.Initialize[InputTask[Unit]] =
+    Def.inputTaskDyn {
+      testOnlyWithSettingsTask(
+        ensimeTestOnlyParser.parsed,
+        extraArgs.value,
+        extraEnv.value,
+        config,
+        (definedTests in config).value,
+        (streams in config).value,
+        (state in config).value,
+        (testExecution in testQuick in config).value,
+        (loadedTestFrameworks in config).value,
+        (testLoader in config).value,
+        (javaOptions in config).value,
+        (envVars in config).value,
+        (baseDirectory in config).value,
+        (fullClasspath in config).value,
+        (testResultLogger in config).value,
+        (resolvedScoped in config).value
+      )
+    }
 
   private val noChanges = new xsbti.compile.DependencyChanges {
     def isEmpty = true
@@ -192,33 +331,6 @@ object EnsimeExtrasPlugin extends AutoPlugin {
       input, noChanges, cp.map(_.data) :+ out, out, opts,
       noopCallback, merrs, in.incSetup.cache, s.log
     )
-  }
-
-  // it would be good if debuggingOff was automatically triggered
-  // https://stackoverflow.com/questions/32350617
-  def toggleDebugging(enable: Boolean): State => State = { implicit state: State =>
-    import CommandSupport._
-    val extracted = Project.extract(state)
-
-    implicit val pr = extracted.currentRef
-    implicit val bs = extracted.structure
-
-    if (enable) {
-      val port = ensimeDebuggingPort.gimme
-      log.warn(s"Enabling debugging for all forked processes on port $port")
-      log.info("Only one process can use the port and it will await a connection before proceeding.")
-    }
-
-    val newSettings = extracted.structure.allProjectRefs map { proj =>
-      val orig = (javaOptions in proj).run
-      val debugFlags = ((ensimeDebuggingFlag in proj).gimme + (ensimeDebuggingPort in proj).gimme)
-      val withoutDebug = orig.diff(List(debugFlags))
-      val withDebug = withoutDebug :+ debugFlags
-      val rewritten = if (enable) withDebug else withoutDebug
-
-      (javaOptions in proj) := rewritten
-    }
-    extracted.append(newSettings, state)
   }
 
   // exploiting a single namespace to workaround https://github.com/ensime/ensime-sbt/issues/148

@@ -1,0 +1,3 @@
+testing_default_key1=default_value1
+-Dtesting_default_key1=default_value1 -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005
+testing_default_key2=default_value2
