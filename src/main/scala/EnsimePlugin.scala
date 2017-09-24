@@ -5,16 +5,16 @@ package org.ensime
 import java.io.FileNotFoundException
 import java.lang.management.ManagementFactory
 
+import org.ensime.SExpFormatter._
+import sbt.IO._
+import sbt.Keys._
+import sbt._
+import sbt.internal.BuildStructure
+import sbt.librarymanagement.ConfigurationFilter
+
 import scala.collection.JavaConverters._
 import scala.util._
 import scala.util.control.NoStackTrace
-import scala.util.matching._
-
-import SExpFormatter._
-import sbt._
-import sbt.IO._
-import sbt.Keys._
-import sbt.complete.Parsers._
 
 /**
  * Conventional way to define importable keys for an AutoPlugin.
@@ -153,11 +153,11 @@ object EnsimePlugin extends AutoPlugin {
 
     ensimeServerVersion := {
       CrossVersion.partialVersion(ensimeScalaVersion.value) match {
-        case Some((2, 10)) => "2.0.0-M4" // 2.0 will maybe drop scala 2.10 support
-        case _             => "2.0.0-M4" // 1.0 clients don't support this style of launch, so why not...
+        case Some((2, 10)) => "2.0.0" // 3.0 drops scala 2.10 support
+        case _             => "2.0.0"
       }
     },
-    ensimeProjectServerVersion := "2.0.0-M4",
+    ensimeProjectServerVersion := "2.0.0", // should really filter on sbtVersion
 
     ensimeIgnoreSourcesInBase := false,
     ensimeIgnoreMissingDirectories := false,
@@ -247,13 +247,21 @@ object EnsimePlugin extends AutoPlugin {
 
     cache.mkdirs()
 
-    val options = ForkOptions(Some(javaH), runJVMOptions = jvmFlags)
-    new ForkRun(options).run(
+    val options = ForkOptions(
+      Some(javaH),
+      None,
+      Vector.empty,
+      None,
+      runJVMOptions = jvmFlags.toVector,
+      false,
+      Map.empty[String, String]
+    )
+    SbtHelper.reportError(new ForkRun(options).run(
       "org.ensime.server.Server",
       orderFiles(jars),
       Nil,
       streams.value.log
-    ).foreach(sys.error)
+    ))
   }
 
   def ensimeConfigTask = Def.inputTask {
@@ -418,6 +426,7 @@ object EnsimePlugin extends AutoPlugin {
 
     def jarsFor(config: Configuration) = updateReport.select(
       configuration = configFilter(config),
+      moduleFilter(),
       artifact = artifactFilter(extension = Artifact.DefaultExtension)
     ).toSet
 
@@ -426,11 +435,13 @@ object EnsimePlugin extends AutoPlugin {
 
     def jarSrcsFor(config: Configuration) = updateClassifiersReport.select(
       configuration = configFilter(config),
+      moduleFilter(),
       artifact = artifactFilter(classifier = Artifact.SourceClassifier)
     ).toSet ++ (ensimeUnmanagedSourceArchives in config in projectRef).run
 
     def jarDocsFor(config: Configuration) = updateClassifiersReport.select(
       configuration = configFilter(config),
+      moduleFilter(),
       artifact = artifactFilter(classifier = Artifact.DocClassifier)
     ).toSet ++ (ensimeUnmanagedJavadocArchives in config in projectRef).run
 
@@ -613,7 +624,7 @@ object EnsimePlugin extends AutoPlugin {
     sys.props.get("java.home").map(new File(_).getParent),
     sys.props.get("java.home"),
     // osx
-    Try("/usr/libexec/java_home".!!.trim).toOption
+    Try(sys.process.Process("/usr/libexec/java_home").!!.trim).toOption
   ).flatten.filter { n =>
       new File(n + "/lib/tools.jar").exists
     }.headOption.map(new File(_).getCanonicalFile).getOrElse(
@@ -745,7 +756,7 @@ object CommandSupport {
   implicit class RichSettingKey[A](key: SettingKey[A]) {
     def gimme(implicit pr: ProjectRef, bs: BuildStructure, s: State): A =
       gimmeOpt getOrElse { fail(s"Missing setting: ${key.key.label}") }
-    def gimmeOpt(implicit pr: ProjectRef, bs: BuildStructure, s: State): Option[A] =
+    def gimmeOpt(implicit pr: ProjectRef, bs: BuildStructure): Option[A] =
       key in pr get bs.data
   }
 

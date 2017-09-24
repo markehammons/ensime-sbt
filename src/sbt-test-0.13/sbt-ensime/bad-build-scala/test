@@ -1,0 +1,4 @@
+-> ensimeConfig
+> ensimeConfigProject
+> ensimeExpect project/.ensime ensimeConfigProject{sbtVersion}.expect
+> checkJavaOptions
