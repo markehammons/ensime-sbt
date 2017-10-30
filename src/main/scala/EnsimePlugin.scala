@@ -453,11 +453,15 @@ object EnsimePlugin extends AutoPlugin {
 
     val IvyConfig = "([A-Za-z]+)->([A-Za-z]+)".r
 
-    val deps = project.dependencies.map { d =>
-      val name = d.project.project
-      val config = d.configuration.collect { case IvyConfig(_, to) => to }.getOrElse("compile")
-      (name, config)
-    }.map(t => EnsimeProjectId(t._1, t._2))
+    def depsFor(config: Configuration): Seq[EnsimeProjectId] = project.dependencies.flatMap { d =>
+      lazy val name = d.project.project
+      d.configuration match {
+        case Some(a) => a.split(";").collect {
+          case IvyConfig(from, to) if (from == config.name) => EnsimeProjectId(name, to)
+        }
+        case None => if (config.name == "compile") Array(EnsimeProjectId(name, "compile")) else Nil
+      }
+    }
 
     def configDataFor(config: Configuration): EnsimeProject = {
       val sbv = scalaBinaryVersion.gimme
@@ -490,7 +494,7 @@ object EnsimePlugin extends AutoPlugin {
       }
 
       val id = EnsimeProjectId(project.id, config.name)
-      val allDeps = deps ++ config.extendsConfigs.collect {
+      val allDeps = depsFor(config) ++ config.extendsConfigs.collect {
         case parent if parent.isPublic =>
           val name = if (parent.name == "runtime") "compile" else parent.name
           EnsimeProjectId(project.id, name)
