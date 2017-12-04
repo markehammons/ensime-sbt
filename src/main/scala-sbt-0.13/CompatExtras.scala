@@ -1,5 +1,6 @@
 package org.ensime
 
+import org.ensime.EnsimeExtrasPlugin.{fileInProject, noChanges}
 import sbt.Defaults.createTestRunners
 import sbt.Keys._
 import sbt.Tests.Execution
@@ -12,36 +13,20 @@ trait CompatExtrasKeys {
     "The equivalent of ensimeRunDebug for testOnly command"
   )
 
-  val ensimeCompileOnly = inputKey[Unit](
-    "Compiles a single scala file"
-  )
-
   val ensimeDebuggingArgs = settingKey[Seq[String]](
     "Java args for for debugging"
   )
-
 }
 
-object CompatExtrasKeysHack extends CompatExtrasKeys
-
 trait CompatExtras {
-  import CompatExtrasKeysHack._
+  import EnsimeExtrasKeys._
 
   def compatSettings: Seq[Setting[_]] = Seq(
     ensimeTestOnlyDebug in Test := testOnlyWithSettings(
       Test,
       extraArgs = ensimeDebuggingArgs
-    ).evaluated,
-    aggregate in ensimeCompileOnly := false
-  ) ++ Seq(Compile, Test).flatMap { config =>
-    // WORKAROUND https://github.com/sbt/sbt/issues/2580
-    inConfig(config) {
-      Seq(
-        ensimeCompileOnly := compileOnlyTask.evaluated,
-        scalacOptions in ensimeCompileOnly := scalacOptions.value
-      )
-    }
-  }
+    ).evaluated
+  )
 
   val ensimeTestOnlyParser: Parser[(String, Seq[String])] = {
     import DefaultParsers._
@@ -165,23 +150,5 @@ trait CompatExtras {
       input, noChanges, cp.map(_.data) :+ out, out, opts,
       noopCallback, merrs, in.incSetup.cache, s.log
     )
-  }
-
-  private[ensime] val noChanges = new xsbti.compile.DependencyChanges {
-    def isEmpty = true
-    def modifiedBinaries = Array()
-    def modifiedClasses = Array()
-  }
-
-  private[ensime] def fileInProject(arg: String, sourceDirs: Seq[File]): File = {
-    val input = file(arg).getCanonicalFile
-    val here = sourceDirs.exists { dir => input.getPath.startsWith(dir.getPath) }
-    if (!here || !input.exists())
-      throw new IllegalArgumentException(s"$arg not associated to $sourceDirs")
-
-    if (!input.getName.endsWith(".scala"))
-      throw new IllegalArgumentException(s"only .scala files are supported: $arg")
-
-    input
   }
 }
