@@ -2,6 +2,7 @@ inThisBuild(
   Seq(
     organization := "org.ensime",
     sonatypeGithost := (Github, "ensime", "ensime-sbt"),
+    version := "2.2.1-SNAPSHOT",
     licenses := Seq(Apache2)
   )
 )

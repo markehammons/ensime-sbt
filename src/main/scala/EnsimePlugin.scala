@@ -673,9 +673,9 @@ object EnsimePlugin extends AutoPlugin {
     sys.props.get("java.home"),
     // osx
     Try(sys.process.Process("/usr/libexec/java_home").!!.trim).toOption
-  ).flatten.filter { n =>
+  ).flatten/*.filter { n =>
       new File(n + "/lib/tools.jar").exists
-    }.headOption.map(new File(_).getCanonicalFile).getOrElse(
+    }*/.headOption.map(new File(_).getCanonicalFile).getOrElse(
       throw new FileNotFoundException(
         """Could not automatically find the JDK/lib/tools.jar.
       |You must explicitly set JDK_HOME or JAVA_HOME.""".stripMargin

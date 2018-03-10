@@ -5,6 +5,6 @@ ivyLoggingLevel := UpdateLogging.Quiet
 scalacOptions ++= Seq("-unchecked", "-deprecation")
 
 addSbtPlugin("com.fommil" % "sbt-sensible" % "2.1.0")
-addSbtPlugin("io.get-coursier" % "sbt-shading" % "1.0.0-RC12")
+addSbtPlugin("io.get-coursier" % "sbt-shading" % "1.0.0-RC13")
 
 libraryDependencies += "org.scala-sbt" % "scripted-plugin" % sbtVersion.value
